@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # Copyright    2021  Xiaomi Corp.        (authors: Fangjun Kuang)
+#              2022  Johns Hopkins University.        (authors: Cihan Xiao)
 #
 # See ../../../../LICENSE for clarification regarding multiple authors
 #
@@ -17,7 +18,7 @@
 
 
 """
-This file computes fbank features of the LibriSpeech dataset.
+This file computes fbank features of the FLEURS dataset.
 It looks for manifests in the directory data/manifests.
 
 The generated fbank features are saved in data/fbank.
@@ -41,26 +42,18 @@ torch.set_num_threads(1)
 torch.set_num_interop_threads(1)
 
 
-def compute_fbank_librispeech():
+def compute_fbank_fleurs():
     src_dir = Path("data/manifests")
     output_dir = Path("data/fbank")
     num_jobs = min(15, os.cpu_count())
     num_mel_bins = 80
 
-    # dataset_parts = (
-    #     "dev-clean",
-    #     "dev-other",
-    #     "test-clean",
-    #     "test-other",
-    #     "train-clean-100",
-    #     "train-clean-360",
-    #     "train-other-500",
-    # )
     dataset_parts = (
-        "dev-clean-2",
-        "train-clean-5",
+        "train",
+        "validation",
+        "test",
     )
-    prefix = "librispeech"
+    prefix = "fleurs"
     suffix = "jsonl.gz"
     manifests = read_manifests_if_cached(
         dataset_parts=dataset_parts,
@@ -114,4 +107,4 @@ if __name__ == "__main__":
 
     logging.basicConfig(format=formatter, level=logging.INFO)
 
-    compute_fbank_librispeech()
+    compute_fbank_fleurs()

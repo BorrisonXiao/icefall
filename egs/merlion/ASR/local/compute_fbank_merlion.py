@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # Copyright    2021  Xiaomi Corp.        (authors: Fangjun Kuang)
+#              2022  Johns Hopkins University.        (authors: Cihan Xiao)
 #
 # See ../../../../LICENSE for clarification regarding multiple authors
 #
@@ -17,7 +18,7 @@
 
 
 """
-This file computes fbank features of the LibriSpeech dataset.
+This file computes fbank features of the FLEURS dataset.
 It looks for manifests in the directory data/manifests.
 
 The generated fbank features are saved in data/fbank.
@@ -41,31 +42,23 @@ torch.set_num_threads(1)
 torch.set_num_interop_threads(1)
 
 
-def compute_fbank_librispeech():
+def compute_fbank_merlion():
     src_dir = Path("data/manifests")
     output_dir = Path("data/fbank")
     num_jobs = min(15, os.cpu_count())
     num_mel_bins = 80
 
-    # dataset_parts = (
-    #     "dev-clean",
-    #     "dev-other",
-    #     "test-clean",
-    #     "test-other",
-    #     "train-clean-100",
-    #     "train-clean-360",
-    #     "train-other-500",
-    # )
     dataset_parts = (
-        "dev-clean-2",
-        "train-clean-5",
+        "SEAME",
+        "LibriSpeech",
+        "NSC",
+        "AISHELL",
+        "dev",
     )
-    prefix = "librispeech"
     suffix = "jsonl.gz"
     manifests = read_manifests_if_cached(
         dataset_parts=dataset_parts,
         output_dir=src_dir,
-        prefix=prefix,
         suffix=suffix,
     )
     assert manifests is not None
@@ -81,7 +74,7 @@ def compute_fbank_librispeech():
 
     with get_executor() as ex:  # Initialize the executor only once.
         for partition, m in manifests.items():
-            cuts_filename = f"{prefix}_cuts_{partition}.{suffix}"
+            cuts_filename = f"cuts_{partition}.{suffix}"
             if (output_dir / cuts_filename).is_file():
                 logging.info(f"{partition} already exists - skipping.")
                 continue
@@ -90,7 +83,7 @@ def compute_fbank_librispeech():
                 recordings=m["recordings"],
                 supervisions=m["supervisions"],
             )
-            if "train" in partition:
+            if "AISHELL" in partition or "LibriSpeech" in partition or "NSC" in partition or "SEAME" in partition:
                 cut_set = (
                     cut_set
                     + cut_set.perturb_speed(0.9)
@@ -98,7 +91,7 @@ def compute_fbank_librispeech():
                 )
             cut_set = cut_set.compute_and_store_features(
                 extractor=extractor,
-                storage_path=f"{output_dir}/{prefix}_feats_{partition}",
+                storage_path=f"{output_dir}/feats_{partition}",
                 # when an executor is specified, make more partitions
                 num_jobs=num_jobs if ex is None else 80,
                 executor=ex,
@@ -114,4 +107,4 @@ if __name__ == "__main__":
 
     logging.basicConfig(format=formatter, level=logging.INFO)
 
-    compute_fbank_librispeech()
+    compute_fbank_merlion()
