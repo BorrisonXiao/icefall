@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # Copyright    2021  Xiaomi Corp.        (authors: Fangjun Kuang)
+#              2022  Johns Hopkins University.        (authors: Cihan Xiao)
 #
 # See ../../../../LICENSE for clarification regarding multiple authors
 #
@@ -17,21 +18,17 @@
 
 
 """
-This file computes fbank features of the LibriSpeech dataset.
+This file computes fbank features of the FLEURS dataset.
 It looks for manifests in the directory data/manifests.
 
 The generated fbank features are saved in data/fbank.
 """
 
-import argparse
 import logging
 import os
 from pathlib import Path
-from typing import Optional
 
-import sentencepiece as spm
 import torch
-from filter_cuts import filter_cuts
 from lhotse import CutSet, Fbank, FbankConfig, LilcomChunkyWriter
 from lhotse.recipes.utils import read_manifests_if_cached
 
@@ -45,39 +42,23 @@ torch.set_num_threads(1)
 torch.set_num_interop_threads(1)
 
 
-def get_args():
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument(
-        "--bpe-model",
-        type=str,
-        help="""Path to the bpe.model. If not None, we will remove short and
-        long utterances before extracting features""",
-    )
-    return parser.parse_args()
-
-
-def compute_fbank_librispeech(bpe_model: Optional[str] = None):
+def compute_fbank_merlion():
     src_dir = Path("data/manifests")
     output_dir = Path("data/fbank")
     num_jobs = min(15, os.cpu_count())
     num_mel_bins = 80
 
-    if bpe_model:
-        logging.info(f"Loading {bpe_model}")
-        sp = spm.SentencePieceProcessor()
-        sp.load(bpe_model)
-
     dataset_parts = (
-        "dev-clean-2",
-        "train-clean-5",
+        "SEAME",
+        "LibriSpeech",
+        "NSC",
+        "AISHELL",
+        "dev",
     )
-    prefix = "librispeech"
     suffix = "jsonl.gz"
     manifests = read_manifests_if_cached(
         dataset_parts=dataset_parts,
         output_dir=src_dir,
-        prefix=prefix,
         suffix=suffix,
     )
     assert manifests is not None
@@ -93,7 +74,7 @@ def compute_fbank_librispeech(bpe_model: Optional[str] = None):
 
     with get_executor() as ex:  # Initialize the executor only once.
         for partition, m in manifests.items():
-            cuts_filename = f"{prefix}_cuts_{partition}.{suffix}"
+            cuts_filename = f"cuts_{partition}.{suffix}"
             if (output_dir / cuts_filename).is_file():
                 logging.info(f"{partition} already exists - skipping.")
                 continue
@@ -102,16 +83,15 @@ def compute_fbank_librispeech(bpe_model: Optional[str] = None):
                 recordings=m["recordings"],
                 supervisions=m["supervisions"],
             )
-            if bpe_model:
-                cut_set = filter_cuts(cut_set, sp)
-
-            if "train" in partition:
+            if "AISHELL" in partition or "LibriSpeech" in partition or "NSC" in partition or "SEAME" in partition:
                 cut_set = (
-                    cut_set + cut_set.perturb_speed(0.9) + cut_set.perturb_speed(1.1)
+                    cut_set
+                    + cut_set.perturb_speed(0.9)
+                    + cut_set.perturb_speed(1.1)
                 )
             cut_set = cut_set.compute_and_store_features(
                 extractor=extractor,
-                storage_path=f"{output_dir}/{prefix}_feats_{partition}",
+                storage_path=f"{output_dir}/feats_{partition}",
                 # when an executor is specified, make more partitions
                 num_jobs=num_jobs if ex is None else 80,
                 executor=ex,
@@ -121,9 +101,10 @@ def compute_fbank_librispeech(bpe_model: Optional[str] = None):
 
 
 if __name__ == "__main__":
-    formatter = "%(asctime)s %(levelname)s [%(filename)s:%(lineno)d] %(message)s"
+    formatter = (
+        "%(asctime)s %(levelname)s [%(filename)s:%(lineno)d] %(message)s"
+    )
 
     logging.basicConfig(format=formatter, level=logging.INFO)
-    args = get_args()
-    logging.info(vars(args))
-    compute_fbank_librispeech(bpe_model=args.bpe_model)
+
+    compute_fbank_merlion()

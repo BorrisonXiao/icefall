@@ -80,17 +80,17 @@ if [ $stage -le 0 ] && [ $stop_stage -ge 0 ]; then
   #   ln -sfv /path/to/LibriSpeech $dl_dir/LibriSpeech
   #
   if [ ! -d $dl_dir/LibriSpeech/train-other-500 ]; then
-    lhotse download librispeech --full $dl_dir
+    lhotse download librispeech --mini $dl_dir
   fi
 
-  # If you have pre-downloaded it to /path/to/musan,
-  # you can create a symlink
-  #
-  #   ln -sfv /path/to/musan $dl_dir/
-  #
-  if [ ! -d $dl_dir/musan ]; then
-    lhotse download musan $dl_dir
-  fi
+  # # If you have pre-downloaded it to /path/to/musan,
+  # # you can create a symlink
+  # #
+  # #   ln -sfv /path/to/musan $dl_dir/
+  # #
+  # if [ ! -d $dl_dir/musan ]; then
+  #   lhotse download musan $dl_dir
+  # fi
 fi
 
 if [ $stage -le 1 ] && [ $stop_stage -ge 1 ]; then
@@ -104,16 +104,16 @@ if [ $stage -le 1 ] && [ $stop_stage -ge 1 ]; then
   fi
 fi
 
-if [ $stage -le 2 ] && [ $stop_stage -ge 2 ]; then
-  log "Stage 2: Prepare musan manifest"
-  # We assume that you have downloaded the musan corpus
-  # to data/musan
-  mkdir -p data/manifests
-  if [ ! -e data/manifests/.musan.done ]; then
-    lhotse prepare musan $dl_dir/musan data/manifests
-    touch data/manifests/.musan.done
-  fi
-fi
+# if [ $stage -le 2 ] && [ $stop_stage -ge 2 ]; then
+#   log "Stage 2: Prepare musan manifest"
+#   # We assume that you have downloaded the musan corpus
+#   # to data/musan
+#   mkdir -p data/manifests
+#   if [ ! -e data/manifests/.musan.done ]; then
+#     lhotse prepare musan $dl_dir/musan data/manifests
+#     touch data/manifests/.musan.done
+#   fi
+# fi
 
 if [ $stage -le 3 ] && [ $stop_stage -ge 3 ]; then
   log "Stage 3: Compute fbank for librispeech"
@@ -132,14 +132,18 @@ if [ $stage -le 3 ] && [ $stop_stage -ge 3 ]; then
 
   if [ ! -e data/fbank/.librispeech-validated.done ]; then
     log "Validating data/fbank for LibriSpeech"
+    # parts=(
+    #   train-clean-100
+    #   train-clean-360
+    #   train-other-500
+    #   test-clean
+    #   test-other
+    #   dev-clean
+    #   dev-other
+    # )
     parts=(
-      train-clean-100
-      train-clean-360
-      train-other-500
-      test-clean
-      test-other
-      dev-clean
-      dev-other
+      train-clean-5
+      dev-clean-2
     )
     for part in ${parts[@]}; do
       python3 ./local/validate_manifest.py \
@@ -149,14 +153,14 @@ if [ $stage -le 3 ] && [ $stop_stage -ge 3 ]; then
   fi
 fi
 
-if [ $stage -le 4 ] && [ $stop_stage -ge 4 ]; then
-  log "Stage 4: Compute fbank for musan"
-  mkdir -p data/fbank
-  if [ ! -e data/fbank/.musan.done ]; then
-    ./local/compute_fbank_musan.py
-    touch data/fbank/.musan.done
-  fi
-fi
+# if [ $stage -le 4 ] && [ $stop_stage -ge 4 ]; then
+#   log "Stage 4: Compute fbank for musan"
+#   mkdir -p data/fbank
+#   if [ ! -e data/fbank/.musan.done ]; then
+#     ./local/compute_fbank_musan.py
+#     touch data/fbank/.musan.done
+#   fi
+# fi
 
 if [ $stage -le 5 ] && [ $stop_stage -ge 5 ]; then
   log "Stage 5: Prepare phone based lang"
@@ -201,10 +205,13 @@ if [ $stage -le 6 ] && [ $stop_stage -ge 6 ]; then
 
     if [ ! -f $lang_dir/transcript_words.txt ]; then
       log "Generate data for BPE training"
+      # files=$(
+      #   find "$dl_dir/LibriSpeech/train-clean-100" -name "*.trans.txt"
+      #   find "$dl_dir/LibriSpeech/train-clean-360" -name "*.trans.txt"
+      #   find "$dl_dir/LibriSpeech/train-other-500" -name "*.trans.txt"
+      # )
       files=$(
-        find "$dl_dir/LibriSpeech/train-clean-100" -name "*.trans.txt"
-        find "$dl_dir/LibriSpeech/train-clean-360" -name "*.trans.txt"
-        find "$dl_dir/LibriSpeech/train-other-500" -name "*.trans.txt"
+        find "$dl_dir/LibriSpeech/train-clean-5" -name "*.trans.txt"
       )
       for f in ${files[@]}; do
         cat $f | cut -d " " -f 2-
@@ -218,6 +225,7 @@ if [ $stage -le 6 ] && [ $stop_stage -ge 6 ]; then
         --transcript $lang_dir/transcript_words.txt
     fi
 
+    ./local/prepare_lang_bpe.py --lang-dir $lang_dir
     if [ ! -f $lang_dir/L_disambig.pt ]; then
       ./local/prepare_lang_bpe.py --lang-dir $lang_dir
 
