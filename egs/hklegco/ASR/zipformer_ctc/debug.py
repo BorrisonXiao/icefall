@@ -49,7 +49,6 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.tensorboard import SummaryWriter
 from transformer import Noam
-from optim import Eden, Eve
 
 from icefall.bpe_graph_compiler import BpeCtcTrainingGraphCompiler
 from icefall.checkpoint import load_checkpoint
@@ -161,30 +160,6 @@ def get_parser():
         type=int,
         default=42,
         help="The seed for random generators intended for reproducibility",
-    )
-
-    parser.add_argument(
-        "--initial-lr",
-        type=float,
-        default=0.003,
-        help="""The initial learning rate. This value should not need to be
-        changed.""",
-    )
-
-    parser.add_argument(
-        "--lr-batches",
-        type=float,
-        default=5000,
-        help="""Number of steps that affects how rapidly the learning rate decreases.
-        We suggest not to change this.""",
-    )
-
-    parser.add_argument(
-        "--lr-epochs",
-        type=float,
-        default=6,
-        help="""Number of epochs that affects how rapidly the learning rate decreases.
-        """,
     )
 
     return parser
@@ -661,74 +636,74 @@ def run(rank, world_size, args):
     if world_size > 1:
         setup_dist(rank, world_size, params.master_port)
 
-    setup_logger(f"{params.exp_dir}/log/log-train")
-    logging.info("Training started")
+    setup_logger(f"{params.exp_dir}/log/log-debug")
+    logging.info("Debugging started")
     logging.info(params)
 
-    if args.tensorboard and rank == 0:
+    if False:
         datetime_str = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         tb_writer = SummaryWriter(log_dir=f"{params.exp_dir}/tensorboard/{datetime_str}")
     else:
         tb_writer = None
 
-    lexicon = Lexicon(params.lang_dir)
-    max_token_id = max(lexicon.tokens)
-    num_classes = max_token_id + 1  # +1 for the blank
+    # lexicon = Lexicon(params.lang_dir)
+    # max_token_id = max(lexicon.tokens)
+    # num_classes = max_token_id + 1  # +1 for the blank
 
     device = torch.device("cpu")
     if torch.cuda.is_available():
         device = torch.device("cuda", rank)
 
-    if "lang_bpe" in str(params.lang_dir):
-        graph_compiler = BpeCtcTrainingGraphCompiler(
-            params.lang_dir,
-            device=device,
-            sos_token="<sos/eos>",
-            eos_token="<sos/eos>",
-        )
-    elif "lang_phone" in str(params.lang_dir):
-        assert params.att_rate == 0, (
-            "Attention decoder training does not support phone lang dirs "
-            "at this time due to a missing <sos/eos> symbol. Set --att-rate=0 "
-            "for pure CTC training when using a phone-based lang dir."
-        )
-        assert params.num_decoder_layers == 0, (
-            "Attention decoder training does not support phone lang dirs "
-            "at this time due to a missing <sos/eos> symbol. "
-            "Set --num-decoder-layers=0 for pure CTC training when using "
-            "a phone-based lang dir."
-        )
-        graph_compiler = CtcTrainingGraphCompiler(
-            lexicon,
-            device=device,
-        )
-        # Manually add the sos/eos ID with their default values
-        # from the BPE recipe which we're adapting here.
-        graph_compiler.sos_id = 1
-        graph_compiler.eos_id = 1
-    else:
-        raise ValueError(
-            f"Unsupported type of lang dir (we expected it to have "
-            f"'lang_bpe' or 'lang_phone' in its name): {params.lang_dir}"
-        )
+    # if "lang_bpe" in str(params.lang_dir):
+    #     graph_compiler = BpeCtcTrainingGraphCompiler(
+    #         params.lang_dir,
+    #         device=device,
+    #         sos_token="<sos/eos>",
+    #         eos_token="<sos/eos>",
+    #     )
+    # elif "lang_phone" in str(params.lang_dir):
+    #     assert params.att_rate == 0, (
+    #         "Attention decoder training does not support phone lang dirs "
+    #         "at this time due to a missing <sos/eos> symbol. Set --att-rate=0 "
+    #         "for pure CTC training when using a phone-based lang dir."
+    #     )
+    #     assert params.num_decoder_layers == 0, (
+    #         "Attention decoder training does not support phone lang dirs "
+    #         "at this time due to a missing <sos/eos> symbol. "
+    #         "Set --num-decoder-layers=0 for pure CTC training when using "
+    #         "a phone-based lang dir."
+    #     )
+    #     graph_compiler = CtcTrainingGraphCompiler(
+    #         lexicon,
+    #         device=device,
+    #     )
+    #     # Manually add the sos/eos ID with their default values
+    #     # from the BPE recipe which we're adapting here.
+    #     graph_compiler.sos_id = 1
+    #     graph_compiler.eos_id = 1
+    # else:
+    #     raise ValueError(
+    #         f"Unsupported type of lang dir (we expected it to have "
+    #         f"'lang_bpe' or 'lang_phone' in its name): {params.lang_dir}"
+    #     )
 
-    logging.info("About to create model")
-    model = Conformer(
-        num_features=params.feature_dim,
-        nhead=params.nhead,
-        d_model=params.attention_dim,
-        num_classes=num_classes,
-        subsampling_factor=params.subsampling_factor,
-        num_decoder_layers=params.num_decoder_layers,
-        vgg_frontend=False,
-        use_feat_batchnorm=params.use_feat_batchnorm,
-    )
+    # logging.info("About to create model")
+    # model = Conformer(
+    #     num_features=params.feature_dim,
+    #     nhead=params.nhead,
+    #     d_model=params.attention_dim,
+    #     num_classes=num_classes,
+    #     subsampling_factor=params.subsampling_factor,
+    #     num_decoder_layers=params.num_decoder_layers,
+    #     vgg_frontend=False,
+    #     use_feat_batchnorm=params.use_feat_batchnorm,
+    # )
 
-    checkpoints = load_checkpoint_if_available(params=params, model=model)
+    # checkpoints = load_checkpoint_if_available(params=params, model=model)
 
-    model.to(device)
-    if world_size > 1:
-        model = DDP(model, device_ids=[rank])
+    # model.to(device)
+    # if world_size > 1:
+    #     model = DDP(model, device_ids=[rank])
 
     # optimizer = Noam(
     #     model.parameters(),
@@ -737,21 +712,9 @@ def run(rank, world_size, args):
     #     warm_step=params.warm_step,
     #     weight_decay=params.weight_decay,
     # )
-    optimizer = Eve(model.parameters(), lr=params.initial_lr)
 
-    scheduler = Eden(optimizer, params.lr_batches, params.lr_epochs)
-
-    if checkpoints and "optimizer" in checkpoints:
-        logging.info("Loading optimizer state dict")
-        optimizer.load_state_dict(checkpoints["optimizer"])
-
-    if (
-        checkpoints
-        and "scheduler" in checkpoints
-        and checkpoints["scheduler"] is not None
-    ):
-        logging.info("Loading scheduler state dict")
-        scheduler.load_state_dict(checkpoints["scheduler"])
+    # if checkpoints:
+    #     optimizer.load_state_dict(checkpoints["optimizer"])
 
     hklegco = HKLEGCOAsrDataModule(args)
 
@@ -771,61 +734,69 @@ def run(rank, world_size, args):
     train_cuts = train_cuts.filter(remove_short_and_long_utt)
     train_dl = hklegco.train_dataloaders(train_cuts)
 
-    dev_asr_cuts = hklegco.dev_asr_cuts()
-    dev_mt_cuts = hklegco.dev_mt_cuts()
-    dev_asr_dl = hklegco.valid_dataloaders(dev_asr_cuts)
-    dev_mt_dl = hklegco.valid_dataloaders(dev_mt_cuts)
+    start_time = datetime.now()
+    for batch_idx, _ in enumerate(train_dl):
+        if batch_idx % 100 == 0:
+            logging.info(batch_idx)
+    end_time = datetime.now()
+    logging.info(f"Time taken to iterate over the dataset: {end_time - start_time}")
+    logging.info(f"Number of batches: {batch_idx}")
 
-    test_cuts = hklegco.test_cuts()
-    test_dl = hklegco.test_dataloaders(test_cuts)
+    # dev_asr_cuts = hklegco.dev_asr_cuts()
+    # dev_mt_cuts = hklegco.dev_mt_cuts()
+    # dev_asr_dl = hklegco.valid_dataloaders(dev_asr_cuts)
+    # dev_mt_dl = hklegco.valid_dataloaders(dev_mt_cuts)
 
-    scan_pessimistic_batches_for_oom(
-        model=model,
-        train_dl=train_dl,
-        optimizer=optimizer,
-        graph_compiler=graph_compiler,
-        params=params,
-    )
+    # test_cuts = hklegco.test_cuts()
+    # test_dl = hklegco.test_dataloaders(test_cuts)
 
-    for epoch in range(params.start_epoch, params.num_epochs):
-        fix_random_seed(params.seed + epoch)
-        train_dl.sampler.set_epoch(epoch)
+    # scan_pessimistic_batches_for_oom(
+    #     model=model,
+    #     train_dl=train_dl,
+    #     optimizer=optimizer,
+    #     graph_compiler=graph_compiler,
+    #     params=params,
+    # )
 
-        cur_lr = optimizer._rate
-        if tb_writer is not None:
-            tb_writer.add_scalar(
-                "train/learning_rate", cur_lr, params.batch_idx_train
-            )
-            tb_writer.add_scalar("train/epoch", epoch, params.batch_idx_train)
+    # for epoch in range(params.start_epoch, params.num_epochs):
+    #     fix_random_seed(params.seed + epoch)
+    #     train_dl.sampler.set_epoch(epoch)
 
-        if rank == 0:
-            logging.info("epoch {}, learning rate {}".format(epoch, cur_lr))
+    #     cur_lr = optimizer._rate
+    #     if tb_writer is not None:
+    #         tb_writer.add_scalar(
+    #             "train/learning_rate", cur_lr, params.batch_idx_train
+    #         )
+    #         tb_writer.add_scalar("train/epoch", epoch, params.batch_idx_train)
 
-        params.cur_epoch = epoch
+    #     if rank == 0:
+    #         logging.info("epoch {}, learning rate {}".format(epoch, cur_lr))
 
-        train_one_epoch(
-            params=params,
-            model=model,
-            optimizer=optimizer,
-            graph_compiler=graph_compiler,
-            train_dl=train_dl,
-            valid_dl=test_dl,  # TODO: Fix this
-            tb_writer=tb_writer,
-            world_size=world_size,
-        )
+    #     params.cur_epoch = epoch
 
-        save_checkpoint(
-            params=params,
-            model=model,
-            optimizer=optimizer,
-            rank=rank,
-        )
+    #     train_one_epoch(
+    #         params=params,
+    #         model=model,
+    #         optimizer=optimizer,
+    #         graph_compiler=graph_compiler,
+    #         train_dl=train_dl,
+    #         valid_dl=test_dl,  # TODO: Fix this
+    #         tb_writer=tb_writer,
+    #         world_size=world_size,
+    #     )
+
+    #     save_checkpoint(
+    #         params=params,
+    #         model=model,
+    #         optimizer=optimizer,
+    #         rank=rank,
+    #     )
 
     logging.info("Done!")
 
-    if world_size > 1:
-        torch.distributed.barrier()
-        cleanup_dist()
+    # if world_size > 1:
+    #     torch.distributed.barrier()
+    #     cleanup_dist()
 
 
 def scan_pessimistic_batches_for_oom(

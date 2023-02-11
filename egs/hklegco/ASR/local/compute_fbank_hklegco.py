@@ -98,6 +98,8 @@ def compute_fbank_hklegco():
                 executor=ex,
                 storage_type=LilcomChunkyWriter,
             )
+            # Split long cuts into many short and un-overlapping cuts
+            cut_set = cut_set.trim_to_supervisions(keep_overlapping=False)
             cut_set.to_file(output_dir / cuts_filename)
 
 

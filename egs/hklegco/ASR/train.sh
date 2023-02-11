@@ -2,7 +2,7 @@
 
 # (See qsub section for explanation on these flags.)
 #$ -cwd
-#$ -N train
+#$ -N train_hklegco
 #$ -j y -o /home/cxiao7/research/icefall/egs/hklegco/ASR/conformer_ctc/exp/log/qlogs/$JOB_NAME-$JOB_ID.out
 #$ -m e
 
@@ -20,11 +20,13 @@ for _ in $(seq 1); do source /home/gqin2/scripts/acquire-gpu; done
 # export CUDA_VISIBLE_DEVICES=$(free-gpu -n 1)
 
 . ./path.sh
+mkdir -p ./conformer_ctc/exp/log/qlogs
 ./conformer_ctc/train.py \
      --exp-dir ./conformer_ctc/exp \
      --world-size 1 \
-     --max-duration 150 \
-     --num-epochs 2 \
+     --max-duration 160 \
+     --start-epoch 2 \
+     --num-epochs 3 \
      --lang-dir data/lang_phone \
      --att-rate 0 \
      --num-decoder-layers 0

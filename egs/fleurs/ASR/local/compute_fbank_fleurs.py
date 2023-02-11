@@ -97,6 +97,7 @@ def compute_fbank_fleurs():
                 executor=ex,
                 storage_type=LilcomChunkyWriter,
             )
+            # It has only one supervision per cut already so no need to trim the cuts.
             cut_set.to_file(output_dir / cuts_filename)
 
 
