@@ -50,8 +50,12 @@ def get_args():
 
 
 def validate_supervision_and_cut_time_bounds(c: Cut):
+    # NOTE: The supervision starting time is relative to the cut starting time.
+    # so this is no longer true. This is kept only as a note.
+    return True
     s = c.supervisions[0]
     if s.start < c.start:
+        breakpoint()
         raise ValueError(
             f"{c.id}: Supervision start time {s.start} is less "
             f"than cut start time {c.start}"

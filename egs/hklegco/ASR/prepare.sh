@@ -66,7 +66,7 @@ if [ $stage -le 2 ] && [ $stop_stage -ge 2 ]; then
   log "Stage 2: Compute fbank for HKLEGCO"
   mkdir -p data/fbank
   # rm -f data/fbank/.hklegco.done
-  rm -rf data/fbank
+  # rm -rf data/fbank
   if [ ! -e data/fbank/.hklegco.done ]; then
     ./local/compute_fbank_hklegco.py
     touch data/fbank/.hklegco.done
@@ -75,6 +75,8 @@ if [ $stage -le 2 ] && [ $stop_stage -ge 2 ]; then
   if [ ! -e data/fbank/.hklegco-validated.done ]; then
     log "Validating data/fbank for HKLEGCO"
     for part in "${parts[@]}"; do
+      # The validation script is no longer needed, but we keep it here
+      # just as a reference.
       python3 ./local/validate_manifest.py \
         data/fbank/hklegco_cuts_${part}.jsonl.gz
     done

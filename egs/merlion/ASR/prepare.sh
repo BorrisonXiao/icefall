@@ -103,41 +103,41 @@ if [ $stage -le 2 ] && [ $stop_stage -ge 2 ]; then
     touch data/fbank/.merlion.done
   fi
 
-  if [ ! -e data/fbank/.merlion-validated.done ]; then
-    log "Validating data/fbank for Merlion"
-    for part in "${parts[@]}"; do
-      python3 ./local/validate_manifest.py \
-        data/fbank/cuts_${part}.jsonl.gz
-    done
-    touch data/fbank/.merlion-validated.done
-  fi
+  # if [ ! -e data/fbank/.merlion-validated.done ]; then
+  #   log "Validating data/fbank for Merlion"
+  #   for part in "${parts[@]}"; do
+  #     python3 ./local/validate_manifest.py \
+  #       data/fbank/cuts_${part}.jsonl.gz
+  #   done
+  #   touch data/fbank/.merlion-validated.done
+  # fi
 fi
 
-# if [ $stage -le 3 ] && [ $stop_stage -ge 3 ]; then
-#   log "Stage 3: Prepare phone based lang"
-#   lang_dir=data/lang_phone
-#   mkdir -p $lang_dir
+if [ $stage -le 3 ] && [ $stop_stage -ge 3 ]; then
+  log "Stage 3: Prepare phone based lang"
+  lang_dir=data/lang_phone
+  mkdir -p $lang_dir
 
-#   # If you have a pre-processed /path/to/lexicon.txt,
-#   # you can create a symlink
-#   #
-#   #   ln -sfv /path/to/lexicon.txt $lang_dir/lexicon.txt
-#   #
-#   # TODO: Write the lexicon generation script
-#   if [ ! -f $lang_dir/lexicon.txt ]; then
-#     ./local/generate_lexicon.py \
-#       --lang-dir $lang_dir \
-#       --lexicon $lang_dir/lexicon.raw.txt
-#   fi
+  # If you have a pre-processed /path/to/lexicon.txt,
+  # you can create a symlink
+  #
+  #   ln -sfv /path/to/lexicon.txt $lang_dir/lexicon.txt
+  #
+  # TODO: Write the lexicon generation script
+  if [ ! -f $lang_dir/lexicon.txt ]; then
+    ./local/generate_lexicon.py \
+      --manifests-dir data/manifests \
+      --lexicon $lang_dir/lexicon.raw.txt
+  fi
 
-#   (echo '!SIL SIL'; echo '<SPOKEN_NOISE> SPN'; echo '<UNK> SPN'; ) |
-#     cat - $lang_dir/lexicon.raw.txt |
-#     sort | uniq > $lang_dir/lexicon.txt
+  # (echo '!SIL SIL'; echo '<SPOKEN_NOISE> SPN'; echo '<UNK> SPN'; ) |
+  #   cat - $lang_dir/lexicon.raw.txt |
+  #   sort | uniq > $lang_dir/lexicon.txt
 
-#   if [ ! -f $lang_dir/L_disambig.pt ]; then
-#     ./local/prepare_lang.py --lang-dir $lang_dir
-#   fi
-# fi
+  # if [ ! -f $lang_dir/L_disambig.pt ]; then
+  #   ./local/prepare_lang.py --lang-dir $lang_dir
+  # fi
+fi
 
 # if [ $stage -le 4 ] && [ $stop_stage -ge 4 ]; then
 #   log "Stage 4: Prepare BPE based lang"
