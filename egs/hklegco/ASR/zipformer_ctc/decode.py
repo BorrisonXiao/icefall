@@ -27,7 +27,16 @@ import sentencepiece as spm
 import torch
 import torch.nn as nn
 from asr_datamodule import HKLEGCOAsrDataModule
-from conformer import Conformer
+from zipformer import Zipformer
+# For some reason the import causes aborted, why??????????
+# try:
+#     print("importing")
+#     from train import add_model_arguments, get_params
+# except Exception as e:
+#     print(e)
+#     print("error importing")
+#     from .train import add_model_arguments, get_params
+
 
 from lhotse.cut import Cut
 from icefall.bpe_graph_compiler import BpeCtcTrainingGraphCompiler
@@ -55,6 +64,117 @@ from icefall.utils import (
     str2bool,
     write_error_stats,
 )
+
+
+def get_params() -> AttributeDict:
+    params = AttributeDict(
+        {
+            "frame_shift_ms": 10.0,
+            "allowed_excess_duration_ratio": 0.1,
+            "best_train_loss": float("inf"),
+            "best_valid_loss": float("inf"),
+            "best_train_epoch": -1,
+            "best_valid_epoch": -1,
+            "batch_idx_train": 0,
+            "log_interval": 50,
+            "reset_interval": 200,
+            "valid_interval": 2000,
+            # parameters for zipformer
+            "feature_dim": 80,
+            "subsampling_factor": 4,  # not passed in, this is fixed.
+            "warm_step": 5000,
+            "env_info": get_env_info(),
+            # parameters for loss
+            "beam_size": 10,
+            "reduction": "sum",
+            "use_double_scores": True,
+            # parameters for decoding
+            "search_beam": 20,
+            "output_beam": 8,
+            "min_active_states": 30,
+            "max_active_states": 10000,
+        }
+    )
+
+    return params
+
+
+def add_model_arguments(parser: argparse.ArgumentParser):
+    parser.add_argument(
+        "--num-encoder-layers",
+        type=str,
+        default="2,4,3,2,4",
+        help="Number of zipformer encoder layers, comma separated.",
+    )
+
+    parser.add_argument(
+        "--feedforward-dims",
+        type=str,
+        default="1024,1024,2048,2048,1024",
+        help="Feedforward dimension of the zipformer encoder layers, comma separated.",
+    )
+
+    parser.add_argument(
+        "--nhead",
+        type=str,
+        default="8,8,8,8,8",
+        help="Number of attention heads in the zipformer encoder layers.",
+    )
+
+    parser.add_argument(
+        "--encoder-dims",
+        type=str,
+        default="384,384,384,384,384",
+        help="Embedding dimension in the 2 blocks of zipformer encoder layers, comma separated",
+    )
+
+    parser.add_argument(
+        "--attention-dims",
+        type=str,
+        default="192,192,192,192,192",
+        help="""Attention dimension in the 2 blocks of zipformer encoder layers, comma separated;
+        not the same as embedding dimension.""",
+    )
+
+    parser.add_argument(
+        "--encoder-unmasked-dims",
+        type=str,
+        default="256,256,256,256,256",
+        help="Unmasked dimensions in the encoders, relates to augmentation during training.  "
+        "Must be <= each of encoder_dims.  Empirically, less than 256 seems to make performance "
+        " worse.",
+    )
+
+    parser.add_argument(
+        "--zipformer-downsampling-factors",
+        type=str,
+        default="1,2,4,8,2",
+        help="Downsampling factor for each stack of encoder layers.",
+    )
+
+    parser.add_argument(
+        "--cnn-module-kernels",
+        type=str,
+        default="31,31,31,31,31",
+        help="Sizes of kernels in convolution modules",
+    )
+
+    parser.add_argument(
+        "--decoder-dim",
+        type=int,
+        default=512,
+        help="Embedding dimension in the decoder model.",
+    )
+
+    parser.add_argument(
+        "--joiner-dim",
+        type=int,
+        default=512,
+        help="""Dimension used in the joiner model.
+        Outputs from the encoder and decoder model are projected
+        to this dimension before adding.
+        """,
+    )
 
 
 def get_parser():
@@ -132,7 +252,7 @@ def get_parser():
     parser.add_argument(
         "--exp-dir",
         type=str,
-        default="conformer_ctc/exp",
+        default="zipformer_ctc/exp",
         help="The experiment dir",
     )
 
@@ -207,31 +327,9 @@ def get_parser():
         last output linear layer
         """,
     )
+    add_model_arguments(parser)
 
     return parser
-
-
-def get_params() -> AttributeDict:
-    params = AttributeDict(
-        {
-            # parameters for conformer
-            "subsampling_factor": 4,
-            "vgg_frontend": False,
-            "use_feat_batchnorm": True,
-            "feature_dim": 80,
-            "nhead": 8,
-            "attention_dim": 512,
-            "num_decoder_layers": 6,
-            # parameters for decoding
-            "search_beam": 20,
-            "output_beam": 8,
-            "min_active_states": 30,
-            "max_active_states": 10000,
-            "use_double_scores": True,
-            "env_info": get_env_info(),
-        }
-    )
-    return params
 
 
 def decode_one_batch(
@@ -306,13 +404,9 @@ def decode_one_batch(
     # at entry, feature is (N, T, C)
 
     supervisions = batch["supervisions"]
+    feature_lens = supervisions["num_frames"].to(device)
 
-    # TODO: Fix this very weird long utt issue, it seems to be a lhotse problem though
-    if feature.shape[1] > 5000:
-        print(batch)
-        print(feature.shape)
-        return None
-    nnet_output, memory, memory_key_padding_mask = model(feature, supervisions)
+    nnet_output, _ = model(feature, feature_lens)
     # nnet_output is (N, T, C)
 
     supervision_segments = torch.stack(
@@ -756,15 +850,22 @@ def main():
     else:
         G = None
 
-    model = Conformer(
+    def to_int_tuple(s: str):
+        return tuple(map(int, s.split(",")))
+
+    model = Zipformer(
         num_features=params.feature_dim,
-        nhead=params.nhead,
-        d_model=params.attention_dim,
-        num_classes=num_classes,
-        subsampling_factor=params.subsampling_factor,
-        num_decoder_layers=params.num_decoder_layers,
-        vgg_frontend=params.vgg_frontend,
-        use_feat_batchnorm=params.use_feat_batchnorm,
+        output_downsampling_factor=2,
+        zipformer_downsampling_factors=to_int_tuple(
+            params.zipformer_downsampling_factors
+        ),
+        encoder_dims=to_int_tuple(params.encoder_dims),
+        attention_dim=to_int_tuple(params.attention_dims),
+        encoder_unmasked_dims=to_int_tuple(params.encoder_unmasked_dims),
+        nhead=to_int_tuple(params.nhead),
+        feedforward_dim=to_int_tuple(params.feedforward_dims),
+        cnn_module_kernels=to_int_tuple(params.cnn_module_kernels),
+        num_encoder_layers=to_int_tuple(params.num_encoder_layers),
     )
 
     if params.avg == 1:
@@ -808,16 +909,7 @@ def main():
     args.return_cuts = True
     hklegco = HKLEGCOAsrDataModule(args)
 
-    # train_cuts = hklegco.train_cuts()
-    # def remove_short_and_long_utt(c: Cut):
-    #     return 0.5 <= c.duration <= 55.0
-    # train_cuts = train_cuts.filter(remove_short_and_long_utt)
-    # train_dl = hklegco.train_dataloaders(train_cuts)
-    # for batch in train_dl:
-    #     print(batch)
-    #     assert False
     test_cuts = hklegco.test_cuts()
-    # test_cuts = test_cuts.filter(remove_short_and_long_utt)
 
     test_dl = hklegco.test_dataloaders(test_cuts)
 

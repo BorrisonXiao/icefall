@@ -187,6 +187,20 @@ if [ $stage -le 6 ] && [ $stop_stage -ge 6 ]; then
       --output $lm_dir/transcript_tokens.txt
   fi
 
+  if [ ! -f $lm_dir/transcript_tokens_validation.txt ]; then
+    ./local/transcript_tokens.py \
+      --manifests-dir data/manifests \
+      --output $lm_dir/transcript_tokens_validation.txt \
+      --part "validation"
+  fi
+
+  if [ ! -f $lm_dir/transcript_tokens_test.txt ]; then
+    ./local/transcript_tokens.py \
+      --manifests-dir data/manifests \
+      --output $lm_dir/transcript_tokens_test.txt \
+      --part "test"
+  fi
+
   if [ ! -f $lm_dir/G_3_gram.arpa ]; then
     ./shared/make_kn_lm.py \
       -ngram-order 3 \
@@ -283,6 +297,184 @@ if [ $stage -le 10 ] && [ $stop_stage -ge 10 ]; then
   #   lang_dir=data/lang_bpe_${vocab_size}
   #   ./local/compile_lg.py --lang-dir $lang_dir
   # done
+fi
+
+if [ $stage -le 11 ] && [ $stop_stage -ge 11 ]; then
+  log "Interpolating the LegiCoST LM with the fleurs LM"
+
+  lang_dir=/home/cxiao7/research/hklegco_icefall/data/lang_phone
+  interpolate_dir=data/lm_phone_interpolate
+  ppl_dir=${interpolate_dir}/ppl
+  mkdir -p $ppl_dir
+  weights_dir=${interpolate_dir}/weights
+  mkdir -p $weights_dir
+
+  lm1_3gram=data/lm_phone/G_3_gram.arpa
+  lm2_3gram=/home/cxiao7/research/hklegco_icefall/data/lm_phone/G_3_gram.arpa
+  lm1_4gram=data/lm_phone/G_4_gram.arpa
+  lm2_4gram=/home/cxiao7/research/hklegco_icefall/data/lm_phone/G_4_gram.arpa
+  dev_text=data/lm_phone/transcript_tokens_validation.txt
+
+  # Compute the interpolation weights based on the validation transcripts
+  ngram -debug 2 -order 3 -unk -lm ${lm1_3gram} -ppl $dev_text >$ppl_dir/lm1-3gram.ppl
+  ngram -debug 2 -order 3 -unk -lm ${lm2_3gram} -ppl $dev_text >$ppl_dir/lm2-3gram.ppl
+  compute-best-mix $ppl_dir/*-3gram.ppl >$weights_dir/best-mix-3gram.ppl
+
+  ngram -debug 2 -order 4 -unk -lm ${lm1_4gram} -ppl $dev_text >$ppl_dir/lm1-4gram.ppl
+  ngram -debug 2 -order 4 -unk -lm ${lm2_4gram} -ppl $dev_text >$ppl_dir/lm2-4gram.ppl
+  compute-best-mix $ppl_dir/*-4gram.ppl >$weights_dir/best-mix-4gram.ppl
+
+  # Interpolate the two LMs
+  ngram \
+    -order 3 \
+    -lm ${lm1_3gram} \
+    -mix-lm ${lm2_3gram} \
+    -lambda $(head -n 1 $weights_dir/best-mix-3gram.ppl | awk '{print substr($(NF-1),2)}') \
+    -write-lm $interpolate_dir/G_3_gram.arpa
+
+  ngram \
+    -order 4 \
+    -lm ${lm1_4gram} \
+    -mix-lm ${lm2_4gram} \
+    -lambda $(head -n 1 $weights_dir/best-mix-4gram.ppl | awk '{print substr($(NF-1),2)}') \
+    -write-lm $interpolate_dir/G_4_gram.arpa
+
+  if [ ! -f $interpolate_dir/G_3_gram.fst.txt ]; then
+    log "Making kaldilm for $interpolate_dir/G_3_gram.arpa"
+    python3 -m kaldilm \
+      --read-symbol-table="$lang_dir/words.txt" \
+      --disambig-symbol='#0' \
+      --max-order=3 \
+      $interpolate_dir/G_3_gram.arpa >$interpolate_dir/G_3_gram.fst.txt
+  fi
+
+  if [ ! -f $interpolate_dir/G_4_gram.fst.txt ]; then
+    log "Making kaldilm for $interpolate_dir/G_4_gram.arpa"
+    python3 -m kaldilm \
+      --read-symbol-table="$lang_dir/words.txt" \
+      --disambig-symbol='#0' \
+      --max-order=4 \
+      $interpolate_dir/G_4_gram.arpa >$interpolate_dir/G_4_gram.fst.txt
+  fi
+
+  inter_lang_dir=data/lang_phone_interpolate
+  mkdir -p $inter_lang_dir
+  cp $lang_dir/*.txt $inter_lang_dir
+  cp $lang_dir/L.pt $inter_lang_dir
+  cp $lang_dir/L_disambig.pt $inter_lang_dir
+
+  ./local/compile_hlg.py --lang-dir $inter_lang_dir --lm-dir $interpolate_dir
+  ./local/compile_lg.py --lang-dir $inter_lang_dir --lm-dir $interpolate_dir
+fi
+
+if [ $stage -le 12 ] && [ $stop_stage -ge 12 ]; then
+  log "Analyze the OOV situation"
+
+  # Using word.txt from the hklegco corpus
+  lang_dir=/home/cxiao7/research/hklegco_icefall/data/lang_phone
+  test_scp=data/lm_phone/transcript_tokens_test.txt
+  train_scp=data/lm_phone/transcript_tokens.txt
+
+  python3 local/analyze_oov.py \
+    --lang-dir $lang_dir \
+    --scp $test_scp
+
+  python3 local/analyze_oov.py \
+    --lang-dir $lang_dir \
+    --scp $train_scp
+fi
+
+if [ $stage -le 13 ] && [ $stop_stage -ge 13 ]; then
+  log "Concatenate the LegiCoST lexicon with the fleurs lexicon"
+
+  tgt_lang_dir=data/lang_phone_concat
+  mkdir -p $tgt_lang_dir
+  src_lang_dir=/home/cxiao7/research/hklegco_icefall/data/lang_phone
+  tgt_lexicon=$tgt_lang_dir/lexicon.tgt.txt
+  src_lexicon=$src_lang_dir/lexicon.raw.txt
+
+  # Generate the lexicon for the target text
+  python3 local/generate_lexicon.py \
+    --manifests-dir data/manifests \
+    --lexicon $tgt_lexicon \
+    --tokens $src_lang_dir/tokens.txt \
+    --words $src_lang_dir/words.txt
+
+  (
+    echo '!SIL SIL'
+    echo '<SPOKEN_NOISE> SPN'
+    echo '<UNK> SPN'
+  ) |
+    cat - $src_lexicon $tgt_lexicon |
+    sort | uniq >$tgt_lang_dir/lexicon.txt
+
+  if [ ! -f $tgt_lang_dir/L_disambig.pt ]; then
+    ./local/prepare_lang.py --lang-dir $tgt_lang_dir
+  fi
+fi
+
+if [ $stage -le 14 ] && [ $stop_stage -ge 14 ]; then
+  log "Perform LM interpolation using the concatenated lexicon"
+
+  lang_dir=data/lang_phone_concat
+  lmdir1=data/lm_phone
+  lmdir2=/home/cxiao7/research/hklegco_icefall/data/lm_phone
+  interpolate_dir=data/lm_phone_concat
+  ppl_dir=${interpolate_dir}/ppl
+  mkdir -p $ppl_dir
+  weights_dir=${interpolate_dir}/weights
+  mkdir -p $weights_dir
+
+  lm1_3gram=$lmdir1/G_3_gram.arpa
+  lm2_3gram=$lmdir2/G_3_gram.arpa
+  lm1_4gram=$lmdir1/G_4_gram.arpa
+  lm2_4gram=$lmdir2/G_4_gram.arpa
+  dev_text=$lmdir1/transcript_tokens_validation.txt
+
+  # Compute the interpolation weights based on the validation transcripts
+  ngram -debug 2 -order 3 -unk -lm ${lm1_3gram} -ppl $dev_text >$ppl_dir/lm1-3gram.ppl
+  ngram -debug 2 -order 3 -unk -lm ${lm2_3gram} -ppl $dev_text >$ppl_dir/lm2-3gram.ppl
+  compute-best-mix $ppl_dir/*-3gram.ppl >$weights_dir/best-mix-3gram.ppl
+
+  ngram -debug 2 -order 4 -unk -lm ${lm1_4gram} -ppl $dev_text >$ppl_dir/lm1-4gram.ppl
+  ngram -debug 2 -order 4 -unk -lm ${lm2_4gram} -ppl $dev_text >$ppl_dir/lm2-4gram.ppl
+  compute-best-mix $ppl_dir/*-4gram.ppl >$weights_dir/best-mix-4gram.ppl
+
+  # Interpolate the two LMs
+  ngram \
+    -order 3 \
+    -lm ${lm1_3gram} \
+    -mix-lm ${lm2_3gram} \
+    -lambda $(head -n 1 $weights_dir/best-mix-3gram.ppl | awk '{print substr($(NF-1),2)}') \
+    -write-lm $interpolate_dir/G_3_gram.arpa
+
+  ngram \
+    -order 4 \
+    -lm ${lm1_4gram} \
+    -mix-lm ${lm2_4gram} \
+    -lambda $(head -n 1 $weights_dir/best-mix-4gram.ppl | awk '{print substr($(NF-1),2)}') \
+    -write-lm $interpolate_dir/G_4_gram.arpa
+
+  if [ ! -f $interpolate_dir/G_3_gram.fst.txt ]; then
+    log "Making kaldilm for $interpolate_dir/G_3_gram.arpa"
+    python3 -m kaldilm \
+      --read-symbol-table="$lang_dir/words.txt" \
+      --disambig-symbol='#0' \
+      --max-order=3 \
+      $interpolate_dir/G_3_gram.arpa >$interpolate_dir/G_3_gram.fst.txt
+  fi
+
+  if [ ! -f $interpolate_dir/G_4_gram.fst.txt ]; then
+    log "Making kaldilm for $interpolate_dir/G_4_gram.arpa"
+    python3 -m kaldilm \
+      --read-symbol-table="$lang_dir/words.txt" \
+      --disambig-symbol='#0' \
+      --max-order=4 \
+      $interpolate_dir/G_4_gram.arpa >$interpolate_dir/G_4_gram.fst.txt
+  fi
+
+  ./local/compile_hlg.py --lang-dir $lang_dir --lm-dir $interpolate_dir
+  ./local/compile_lg.py --lang-dir $lang_dir --lm-dir $interpolate_dir
 fi
 
 # if [ $stage -le 11 ] && [ $stop_stage -ge 11 ]; then

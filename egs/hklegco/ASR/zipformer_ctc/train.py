@@ -20,10 +20,10 @@
 """
 Usage:
   export CUDA_VISIBLE_DEVICES="0,1,2,3"
-  ./conformer_ctc/train.py \
-     --exp-dir ./conformer_ctc/exp \
+  ./zipformer_ctc/train.py \
+     --exp-dir ./zipformer_ctc/exp \
      --world-size 1 \
-     --max-duration 200 \
+     --max-duration 160 \
      --num-epochs 2 \
      --lang-dir data/lang_phone \
      --att-rate 0 \
@@ -41,7 +41,7 @@ import torch
 import torch.multiprocessing as mp
 import torch.nn as nn
 from asr_datamodule import HKLEGCOAsrDataModule
-from conformer import Conformer
+from zipformer import Zipformer
 from lhotse.cut import Cut
 from lhotse.utils import fix_random_seed
 from torch import Tensor
@@ -49,7 +49,6 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.tensorboard import SummaryWriter
 from transformer import Noam
-from optim import Eden, Eve
 
 from icefall.bpe_graph_compiler import BpeCtcTrainingGraphCompiler
 from icefall.checkpoint import load_checkpoint
@@ -66,6 +65,84 @@ from icefall.utils import (
     str2bool,
 )
 from datetime import datetime
+
+
+def add_model_arguments(parser: argparse.ArgumentParser):
+    parser.add_argument(
+        "--num-encoder-layers",
+        type=str,
+        default="2,4,3,2,4",
+        help="Number of zipformer encoder layers, comma separated.",
+    )
+
+    parser.add_argument(
+        "--feedforward-dims",
+        type=str,
+        default="1024,1024,2048,2048,1024",
+        help="Feedforward dimension of the zipformer encoder layers, comma separated.",
+    )
+
+    parser.add_argument(
+        "--nhead",
+        type=str,
+        default="8,8,8,8,8",
+        help="Number of attention heads in the zipformer encoder layers.",
+    )
+
+    parser.add_argument(
+        "--encoder-dims",
+        type=str,
+        default="384,384,384,384,384",
+        help="Embedding dimension in the 2 blocks of zipformer encoder layers, comma separated",
+    )
+
+    parser.add_argument(
+        "--attention-dims",
+        type=str,
+        default="192,192,192,192,192",
+        help="""Attention dimension in the 2 blocks of zipformer encoder layers, comma separated;
+        not the same as embedding dimension.""",
+    )
+
+    parser.add_argument(
+        "--encoder-unmasked-dims",
+        type=str,
+        default="256,256,256,256,256",
+        help="Unmasked dimensions in the encoders, relates to augmentation during training.  "
+        "Must be <= each of encoder_dims.  Empirically, less than 256 seems to make performance "
+        " worse.",
+    )
+
+    parser.add_argument(
+        "--zipformer-downsampling-factors",
+        type=str,
+        default="1,2,4,8,2",
+        help="Downsampling factor for each stack of encoder layers.",
+    )
+
+    parser.add_argument(
+        "--cnn-module-kernels",
+        type=str,
+        default="31,31,31,31,31",
+        help="Sizes of kernels in convolution modules",
+    )
+
+    parser.add_argument(
+        "--decoder-dim",
+        type=int,
+        default=512,
+        help="Embedding dimension in the decoder model.",
+    )
+
+    parser.add_argument(
+        "--joiner-dim",
+        type=int,
+        default=512,
+        help="""Dimension used in the joiner model.
+        Outputs from the encoder and decoder model are projected
+        to this dimension before adding.
+        """,
+    )
 
 
 def get_parser():
@@ -107,14 +184,14 @@ def get_parser():
         default=0,
         help="""Resume training from from this epoch.
         If it is positive, it will load checkpoint from
-        conformer_ctc/exp/epoch-{start_epoch-1}.pt
+        zipformer_ctc/exp/epoch-{start_epoch-1}.pt
         """,
     )
 
     parser.add_argument(
         "--exp-dir",
         type=str,
-        default="conformer_ctc/exp",
+        default="zipformer_ctc/exp",
         help="""The experiment dir.
         It specifies the directory where all training related
         files, e.g., checkpoints, log, etc, are saved
@@ -162,30 +239,7 @@ def get_parser():
         default=42,
         help="The seed for random generators intended for reproducibility",
     )
-
-    parser.add_argument(
-        "--initial-lr",
-        type=float,
-        default=0.003,
-        help="""The initial learning rate. This value should not need to be
-        changed.""",
-    )
-
-    parser.add_argument(
-        "--lr-batches",
-        type=float,
-        default=5000,
-        help="""Number of steps that affects how rapidly the learning rate decreases.
-        We suggest not to change this.""",
-    )
-
-    parser.add_argument(
-        "--lr-epochs",
-        type=float,
-        default=6,
-        help="""Number of epochs that affects how rapidly the learning rate decreases.
-        """,
-    )
+    add_model_arguments(parser)
 
     return parser
 
@@ -253,6 +307,8 @@ def get_params() -> AttributeDict:
     """
     params = AttributeDict(
         {
+            "frame_shift_ms": 10.0,
+            "allowed_excess_duration_ratio": 0.1,
             "best_train_loss": float("inf"),
             "best_valid_loss": float("inf"),
             "best_train_epoch": -1,
@@ -261,12 +317,10 @@ def get_params() -> AttributeDict:
             "log_interval": 50,
             "reset_interval": 200,
             "valid_interval": 3000,
-            # parameters for conformer
+            # parameters for zipformer
             "feature_dim": 80,
-            "subsampling_factor": 4,
-            "use_feat_batchnorm": True,
-            "attention_dim": 512,
-            "nhead": 8,
+            "subsampling_factor": 4,  # not passed in, this is fixed.
+            "warm_step": 5000,
             # parameters for loss
             "beam_size": 10,
             "reduction": "sum",
@@ -382,7 +436,7 @@ def compute_loss(
       params:
         Parameters for training. See :func:`get_params`.
       model:
-        The model for training. It is an instance of Conformer in our case.
+        The model for training. It is an instance of Zipformer in our case.
       batch:
         A batch of data. See `lhotse.dataset.K2SpeechRecognitionDataset()`
         for the content in it.
@@ -402,8 +456,9 @@ def compute_loss(
     feature = feature.to(device)
 
     supervisions = batch["supervisions"]
+    feature_lens = supervisions["num_frames"].to(device)
     with torch.set_grad_enabled(is_training):
-        nnet_output, encoder_memory, memory_mask = model(feature, supervisions)
+        nnet_output, _ = model(feature, feature_lens)
         # nnet_output is (N, T, C)
 
     # NOTE: We need `encode_supervisions` to sort sequences with
@@ -713,15 +768,21 @@ def run(rank, world_size, args):
         )
 
     logging.info("About to create model")
-    model = Conformer(
+    def to_int_tuple(s: str):
+        return tuple(map(int, s.split(",")))
+    model = Zipformer(
         num_features=params.feature_dim,
-        nhead=params.nhead,
-        d_model=params.attention_dim,
-        num_classes=num_classes,
-        subsampling_factor=params.subsampling_factor,
-        num_decoder_layers=params.num_decoder_layers,
-        vgg_frontend=False,
-        use_feat_batchnorm=params.use_feat_batchnorm,
+        output_downsampling_factor=2,
+        zipformer_downsampling_factors=to_int_tuple(
+            params.zipformer_downsampling_factors
+        ),
+        encoder_dims=to_int_tuple(params.encoder_dims),
+        attention_dim=to_int_tuple(params.attention_dims),
+        encoder_unmasked_dims=to_int_tuple(params.encoder_unmasked_dims),
+        nhead=to_int_tuple(params.nhead),
+        feedforward_dim=to_int_tuple(params.feedforward_dims),
+        cnn_module_kernels=to_int_tuple(params.cnn_module_kernels),
+        num_encoder_layers=to_int_tuple(params.num_encoder_layers),
     )
 
     checkpoints = load_checkpoint_if_available(params=params, model=model)
@@ -730,28 +791,17 @@ def run(rank, world_size, args):
     if world_size > 1:
         model = DDP(model, device_ids=[rank])
 
-    # optimizer = Noam(
-    #     model.parameters(),
-    #     model_size=params.attention_dim,
-    #     factor=params.lr_factor,
-    #     warm_step=params.warm_step,
-    #     weight_decay=params.weight_decay,
-    # )
-    optimizer = Eve(model.parameters(), lr=params.initial_lr)
+    optimizer = Noam(
+        model.parameters(),
+        # model_size=params.attention_dim,
+        factor=params.lr_factor,
+        warm_step=params.warm_step,
+        weight_decay=params.weight_decay,
+    )
 
-    scheduler = Eden(optimizer, params.lr_batches, params.lr_epochs)
-
-    if checkpoints and "optimizer" in checkpoints:
+    if checkpoints:
         logging.info("Loading optimizer state dict")
         optimizer.load_state_dict(checkpoints["optimizer"])
-
-    if (
-        checkpoints
-        and "scheduler" in checkpoints
-        and checkpoints["scheduler"] is not None
-    ):
-        logging.info("Loading scheduler state dict")
-        scheduler.load_state_dict(checkpoints["scheduler"])
 
     hklegco = HKLEGCOAsrDataModule(args)
 

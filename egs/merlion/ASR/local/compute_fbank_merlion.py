@@ -27,6 +27,7 @@ The generated fbank features are saved in data/fbank.
 import logging
 import os
 from pathlib import Path
+import math
 
 import torch
 from lhotse import CutSet, Fbank, FbankConfig, LilcomChunkyWriter
@@ -43,17 +44,20 @@ torch.set_num_interop_threads(1)
 
 
 def compute_fbank_merlion():
+    parti = True
+    no_perturb = False
     src_dir = Path("data/manifests")
     output_dir = Path("data/fbank")
     num_jobs = min(15, os.cpu_count())
     num_mel_bins = 80
 
     dataset_parts = (
-        "SEAME",
-        "LibriSpeech",
-        "NSC",
-        "AISHELL",
+        # "SEAME",
+        # "LibriSpeech",
+        # "NSC",
+        # "AISHELL",
         "dev",
+        # "test",
     )
     suffix = "jsonl.gz"
     manifests = read_manifests_if_cached(
@@ -74,7 +78,12 @@ def compute_fbank_merlion():
 
     with get_executor() as ex:  # Initialize the executor only once.
         for partition, m in manifests.items():
-            cuts_filename = f"cuts_{partition}.{suffix}"
+            # cuts_filename = f"cuts_{partition}.{suffix}"
+            if parti:
+                cuts_filename = f"cuts_dev_part.jsonl.gz"
+                raw_cuts_filename = f"cuts_dev_part_raw.jsonl.gz"
+            else:
+                cuts_filename = f"cuts_{partition}.jsonl.gz" if not no_perturb else f"cuts_{partition}_raw.jsonl.gz"
             if (output_dir / cuts_filename).is_file():
                 logging.info(f"{partition} already exists - skipping.")
                 continue
@@ -83,15 +92,36 @@ def compute_fbank_merlion():
                 recordings=m["recordings"],
                 supervisions=m["supervisions"],
             )
-            if "AISHELL" in partition or "LibriSpeech" in partition or "NSC" in partition or "SEAME" in partition:
+            if parti:
+                sublen = math.floor(len(cut_set) / 100 * 95)
+                raw_set = cut_set.subset(last=len(cut_set) - sublen)
+                cut_set = cut_set.subset(first=sublen)
+                raw_set.describe()
+                cut_set.describe()
+            if "AISHELL" in partition or "LibriSpeech" in partition or "NSC" in partition or "SEAME" in partition or "dev" in partition and not no_perturb:
+                logging.info("Applying speed perturbation")
                 cut_set = (
                     cut_set
                     + cut_set.perturb_speed(0.9)
                     + cut_set.perturb_speed(1.1)
                 )
+
+            if parti:
+                storage_path = f"{output_dir}/feats_dev_part"
+                raw_storage_path = f"{output_dir}/feats_dev_part_raw"
+            else:
+                storage_path = f"{output_dir}/feats_{partition}" if not no_perturb else f"{output_dir}/feats_{partition}_raw"
             cut_set = cut_set.compute_and_store_features(
                 extractor=extractor,
-                storage_path=f"{output_dir}/feats_{partition}",
+                storage_path=storage_path,
+                # when an executor is specified, make more partitions
+                num_jobs=num_jobs if ex is None else 80,
+                executor=ex,
+                storage_type=LilcomChunkyWriter,
+            )
+            raw_set = raw_set.compute_and_store_features(
+                extractor=extractor,
+                storage_path=raw_storage_path,
                 # when an executor is specified, make more partitions
                 num_jobs=num_jobs if ex is None else 80,
                 executor=ex,
@@ -100,6 +130,9 @@ def compute_fbank_merlion():
             # Split long cuts into many short and un-overlapping cuts
             cut_set = cut_set.trim_to_supervisions(keep_overlapping=False)
             cut_set.to_file(output_dir / cuts_filename)
+            
+            raw_set = raw_set.trim_to_supervisions(keep_overlapping=False)
+            raw_set.to_file(output_dir / raw_cuts_filename)
 
 
 if __name__ == "__main__":

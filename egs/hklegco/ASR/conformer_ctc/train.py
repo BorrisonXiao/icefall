@@ -49,7 +49,6 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.tensorboard import SummaryWriter
 from transformer import Noam
-from optim import Eden, Eve
 
 from icefall.bpe_graph_compiler import BpeCtcTrainingGraphCompiler
 from icefall.checkpoint import load_checkpoint
@@ -163,30 +162,6 @@ def get_parser():
         help="The seed for random generators intended for reproducibility",
     )
 
-    parser.add_argument(
-        "--initial-lr",
-        type=float,
-        default=0.003,
-        help="""The initial learning rate. This value should not need to be
-        changed.""",
-    )
-
-    parser.add_argument(
-        "--lr-batches",
-        type=float,
-        default=5000,
-        help="""Number of steps that affects how rapidly the learning rate decreases.
-        We suggest not to change this.""",
-    )
-
-    parser.add_argument(
-        "--lr-epochs",
-        type=float,
-        default=6,
-        help="""Number of epochs that affects how rapidly the learning rate decreases.
-        """,
-    )
-
     return parser
 
 
@@ -273,7 +248,7 @@ def get_params() -> AttributeDict:
             "use_double_scores": True,
             # parameters for Noam
             "weight_decay": 1e-6,
-            "warm_step": 80000,
+            "warm_step": 60000,
             "env_info": get_env_info(),
         }
     )
@@ -730,28 +705,17 @@ def run(rank, world_size, args):
     if world_size > 1:
         model = DDP(model, device_ids=[rank])
 
-    # optimizer = Noam(
-    #     model.parameters(),
-    #     model_size=params.attention_dim,
-    #     factor=params.lr_factor,
-    #     warm_step=params.warm_step,
-    #     weight_decay=params.weight_decay,
-    # )
-    optimizer = Eve(model.parameters(), lr=params.initial_lr)
+    optimizer = Noam(
+        model.parameters(),
+        model_size=params.attention_dim,
+        factor=params.lr_factor,
+        warm_step=params.warm_step,
+        weight_decay=params.weight_decay,
+    )
 
-    scheduler = Eden(optimizer, params.lr_batches, params.lr_epochs)
-
-    if checkpoints and "optimizer" in checkpoints:
+    if checkpoints:
         logging.info("Loading optimizer state dict")
         optimizer.load_state_dict(checkpoints["optimizer"])
-
-    if (
-        checkpoints
-        and "scheduler" in checkpoints
-        and checkpoints["scheduler"] is not None
-    ):
-        logging.info("Loading scheduler state dict")
-        scheduler.load_state_dict(checkpoints["scheduler"])
 
     hklegco = HKLEGCOAsrDataModule(args)
 
