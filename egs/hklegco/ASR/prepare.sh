@@ -19,14 +19,9 @@ dl_dir=$PWD/download
 # It will generate data/lang_bpe_xxx,
 # data/lang_bpe_yyy if the array contains xxx, yyy
 vocab_sizes=(
-<<<<<<< HEAD
   32000
   16000
   8000
-=======
-  20000
-  16000
->>>>>>> 8b96e5edcb5894cc5ce5ee14c3800c1e4dac653c
 )
 parts=(
   "train"
@@ -106,7 +101,6 @@ if [ $stage -le 3 ] && [ $stop_stage -ge 3 ]; then
       --lexicon $lang_dir/lexicon.raw.txt
   fi
 
-<<<<<<< HEAD
   (
     echo '!SIL SIL'
     echo '<SPOKEN_NOISE> SPN'
@@ -114,18 +108,12 @@ if [ $stage -le 3 ] && [ $stop_stage -ge 3 ]; then
   ) |
     cat - $lang_dir/lexicon.raw.txt |
     sort | uniq >$lang_dir/lexicon.txt
-=======
-  (echo '!SIL SIL'; echo '<SPOKEN_NOISE> SPN'; echo '<UNK> SPN'; ) |
-    cat - $lang_dir/lexicon.raw.txt |
-    sort | uniq > $lang_dir/lexicon.txt
->>>>>>> 8b96e5edcb5894cc5ce5ee14c3800c1e4dac653c
 
   if [ ! -f $lang_dir/L_disambig.pt ]; then
     ./local/prepare_lang.py --lang-dir $lang_dir
   fi
 fi
 
-<<<<<<< HEAD
 if [ $stage -le 4 ] && [ $stop_stage -ge 4 ]; then
   log "Stage 4: Prepare BPE based lang"
 
@@ -182,71 +170,12 @@ if [ $stage -le 5 ] && [ $stop_stage -ge 5 ]; then
     fi
   done
 fi
-=======
-# if [ $stage -le 4 ] && [ $stop_stage -ge 4 ]; then
-#   log "Stage 4: Prepare BPE based lang"
-
-#   for vocab_size in "${vocab_sizes[@]}"; do
-#     lang_dir=data/lang_bpe_${vocab_size}
-#     mkdir -p $lang_dir
-
-#     if [ ! -f $lang_dir/bpe.model ]; then
-#       ./local/train_bpe_model.py \
-#         --lang-dir $lang_dir \
-#         --vocab-size $vocab_size \
-#         --supervision-set data/manifests/fleurs_supervisions_train.jsonl.gz
-#     fi
-
-#     if [ ! -f $lang_dir/L_disambig.pt ]; then
-#       ./local/prepare_lang_bpe.py --lang-dir $lang_dir
-
-#       log "Validating $lang_dir/lexicon.txt"
-#       ./local/validate_bpe_lexicon.py \
-#         --lexicon $lang_dir/lexicon.txt \
-#         --bpe-model $lang_dir/bpe.model
-#     fi
-#   done
-# fi
-
-# if [ $stage -le 5 ] && [ $stop_stage -ge 5 ]; then
-#   log "Stage 5: Prepare bigram P"
-
-#   for vocab_size in "${vocab_sizes[@]}"; do
-#     lang_dir=data/lang_bpe_${vocab_size}
-
-#     if [ ! -f $lang_dir/transcript_tokens.txt ]; then
-#       ./local/convert_transcript_words_to_tokens.py \
-#         --lexicon $lang_dir/lexicon.txt \
-#         --bpe-model $lang_dir/bpe.model \
-#         --transcript $lang_dir/transcript_words.txt \
-#         --oov "<UNK>" \
-#         >$lang_dir/transcript_tokens.txt
-#     fi
-
-#     if [ ! -f $lang_dir/P.arpa ]; then
-#       ./shared/make_kn_lm.py \
-#         -ngram-order 2 \
-#         -text $lang_dir/transcript_tokens.txt \
-#         -lm $lang_dir/P.arpa
-#     fi
-
-#     if [ ! -f $lang_dir/P.fst.txt ]; then
-#       python3 -m kaldilm \
-#         --read-symbol-table="$lang_dir/tokens.txt" \
-#         --disambig-symbol='#0' \
-#         --max-order=2 \
-#         $lang_dir/P.arpa >$lang_dir/P.fst.txt
-#     fi
-#   done
-# fi
->>>>>>> 8b96e5edcb5894cc5ce5ee14c3800c1e4dac653c
 
 if [ $stage -le 6 ] && [ $stop_stage -ge 6 ]; then
   log "Stage 6: Prepare G"
   # We assume you have install kaldilm, if not, please install
   # it using: pip install kaldilm
 
-<<<<<<< HEAD
   # # Phone based LM
   # lang_dir=data/lang_phone
   # lm_dir=data/lm_phone
@@ -328,49 +257,6 @@ if [ $stage -le 6 ] && [ $stop_stage -ge 6 ]; then
         $lm_dir/G_4_gram.arpa >$lm_dir/G_4_gram.fst.txt
     fi
   done
-=======
-  lang_dir=data/lang_phone
-  lm_dir=data/lm_phone
-  mkdir -p $lm_dir
-
-  if [ ! -f $lm_dir/transcript_tokens.txt ]; then
-    ./local/transcript_tokens.py \
-      --manifests-dir data/manifests \
-      --output $lm_dir/transcript_tokens.txt
-  fi
-
-  if [ ! -f $lm_dir/G_3_gram.arpa ]; then
-    ./shared/make_kn_lm.py \
-      -ngram-order 3 \
-      -text $lm_dir/transcript_tokens.txt \
-      -lm $lm_dir/G_3_gram.arpa
-  fi
-
-  if [ ! -f $lm_dir/G_3_gram.fst.txt ]; then
-    log "Making kaldilm for $lm_dir/G_3_gram.arpa"
-    python3 -m kaldilm \
-      --read-symbol-table="$lang_dir/words.txt" \
-      --disambig-symbol='#0' \
-      --max-order=3 \
-      $lm_dir/G_3_gram.arpa >$lm_dir/G_3_gram.fst.txt
-  fi
-
-  if [ ! -f $lm_dir/G_4_gram.arpa ]; then
-    ./shared/make_kn_lm.py \
-      -ngram-order 4 \
-      -text $lm_dir/transcript_tokens.txt \
-      -lm $lm_dir/G_4_gram.arpa
-  fi
-
-  if [ ! -f $lm_dir/G_4_gram.fst.txt ]; then
-    log "Making kaldilm for $lm_dir/G_4_gram.arpa"
-    python3 -m kaldilm \
-      --read-symbol-table="$lang_dir/words.txt" \
-      --disambig-symbol='#0' \
-      --max-order=4 \
-      $lm_dir/G_4_gram.arpa >$lm_dir/G_4_gram.fst.txt
-  fi
->>>>>>> 8b96e5edcb5894cc5ce5ee14c3800c1e4dac653c
 fi
 
 if [ $stage -le 9 ] && [ $stop_stage -ge 9 ]; then
