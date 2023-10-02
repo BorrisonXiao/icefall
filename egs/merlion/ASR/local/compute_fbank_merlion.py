@@ -18,7 +18,7 @@
 
 
 """
-This file computes fbank features of the FLEURS dataset.
+This file computes fbank features of the MERLion dataset.
 It looks for manifests in the directory data/manifests.
 
 The generated fbank features are saved in data/fbank.
@@ -78,7 +78,6 @@ def compute_fbank_merlion():
 
     with get_executor() as ex:  # Initialize the executor only once.
         for partition, m in manifests.items():
-            # cuts_filename = f"cuts_{partition}.{suffix}"
             if parti:
                 cuts_filename = f"cuts_dev_part.jsonl.gz"
                 raw_cuts_filename = f"cuts_dev_part_raw.jsonl.gz"
@@ -93,6 +92,7 @@ def compute_fbank_merlion():
                 supervisions=m["supervisions"],
             )
             if parti:
+                # Split the dev set into 95% for training and 5% for validation
                 sublen = math.floor(len(cut_set) / 100 * 95)
                 raw_set = cut_set.subset(last=len(cut_set) - sublen)
                 cut_set = cut_set.subset(first=sublen)
@@ -131,6 +131,7 @@ def compute_fbank_merlion():
             cut_set = cut_set.trim_to_supervisions(keep_overlapping=False)
             cut_set.to_file(output_dir / cuts_filename)
             
+            # Un-perturbed data for testing/development
             raw_set = raw_set.trim_to_supervisions(keep_overlapping=False)
             raw_set.to_file(output_dir / raw_cuts_filename)
 

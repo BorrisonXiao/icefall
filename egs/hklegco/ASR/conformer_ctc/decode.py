@@ -307,11 +307,6 @@ def decode_one_batch(
 
     supervisions = batch["supervisions"]
 
-    # TODO: Fix this very weird long utt issue, it seems to be a lhotse problem though
-    if feature.shape[1] > 5000:
-        print(batch)
-        print(feature.shape)
-        return None
     nnet_output, memory, memory_key_padding_mask = model(feature, supervisions)
     # nnet_output is (N, T, C)
 
@@ -808,21 +803,20 @@ def main():
     args.return_cuts = True
     hklegco = HKLEGCOAsrDataModule(args)
 
-    # train_cuts = hklegco.train_cuts()
-    # def remove_short_and_long_utt(c: Cut):
-    #     return 0.5 <= c.duration <= 55.0
-    # train_cuts = train_cuts.filter(remove_short_and_long_utt)
-    # train_dl = hklegco.train_dataloaders(train_cuts)
-    # for batch in train_dl:
-    #     print(batch)
-    #     assert False
-    test_cuts = hklegco.test_cuts()
-    # test_cuts = test_cuts.filter(remove_short_and_long_utt)
+    # test_cuts = hklegco.test_cuts()
 
-    test_dl = hklegco.test_dataloaders(test_cuts)
+    # test_dl = hklegco.test_dataloaders(test_cuts)
 
-    test_sets = ["test"]
-    test_dl = [test_dl]
+    # test_sets = ["test"]
+    # test_dl = [test_dl]
+
+    dev_asr_cuts = hklegco.dev_asr_cuts()
+    dev_mt_cuts = hklegco.dev_mt_cuts()
+    dev_asr_dl = hklegco.test_dataloaders(dev_asr_cuts)
+    dev_mt_dl = hklegco.test_dataloaders(dev_mt_cuts)
+
+    test_sets = ["dev-asr", "dev-mt"]
+    test_dl = [dev_asr_dl, dev_mt_dl]
 
     for test_set, test_dl in zip(test_sets, test_dl):
         results_dict = decode_dataset(

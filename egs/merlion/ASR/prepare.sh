@@ -106,8 +106,8 @@ if [ $stage -le 2 ] && [ $stop_stage -ge 2 ]; then
   log "Stage 2: Compute fbank for merlion sets"
   mkdir -p data/fbank
   # if [ ! -e data/fbank/.merlion.done ]; then
-  ./local/compute_fbank_merlion.py
-  touch data/fbank/.merlion.done
+  # ./local/compute_fbank_merlion.py
+  # touch data/fbank/.merlion.done
   # fi
 
   # if [ ! -e data/fbank/.merlion-validated.done ]; then
@@ -118,6 +118,19 @@ if [ $stage -le 2 ] && [ $stop_stage -ge 2 ]; then
   #   done
   #   touch data/fbank/.merlion-validated.done
   # fi
+
+  # ./local/compute_fbank_mix.py \
+  #   --m 2 \
+  #   --n-factor 0.5
+
+  # ./local/compute_fbank_mix.py \
+  #   --m 2 \
+  #   --n-factor 0.2
+
+  ./local/compute_fbank_mix.py \
+    --m 3 \
+    --n-factor 0.0
+  touch data/fbank/.mix.done
 fi
 
 if [ $stage -le 3 ] && [ $stop_stage -ge 3 ]; then

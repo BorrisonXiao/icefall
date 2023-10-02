@@ -45,11 +45,17 @@ def get_args():
         help="""Input and output directory.
         """,
     )
+    parser.add_argument(
+        "--lm-dir",
+        type=str,
+        help="""LM directory.
+        """,
+    )
 
     return parser.parse_args()
 
 
-def compile_LG(lang_dir: str) -> k2.Fsa:
+def compile_LG(lang_dir : str, lm_dir : str = "data/lm") -> k2.Fsa:
     """
     Args:
       lang_dir:
@@ -61,15 +67,15 @@ def compile_LG(lang_dir: str) -> k2.Fsa:
     lexicon = Lexicon(lang_dir)
     L = k2.Fsa.from_dict(torch.load(f"{lang_dir}/L_disambig.pt"))
 
-    if Path("data/lm/G_3_gram.pt").is_file():
+    if Path(f"{lm_dir}/G_3_gram.pt").is_file():
         logging.info("Loading pre-compiled G_3_gram")
-        d = torch.load("data/lm/G_3_gram.pt")
+        d = torch.load(f"{lm_dir}/G_3_gram.pt")
         G = k2.Fsa.from_dict(d)
     else:
         logging.info("Loading G_3_gram.fst.txt")
-        with open("data/lm/G_3_gram.fst.txt") as f:
+        with open(f"{lm_dir}/G_3_gram.fst.txt") as f:
             G = k2.Fsa.from_openfst(f.read(), acceptor=False)
-            torch.save(G.as_dict(), "data/lm/G_3_gram.pt")
+            torch.save(G.as_dict(), f"{lm_dir}/G_3_gram.pt")
 
     first_token_disambig_id = lexicon.token_table["#0"]
     first_word_disambig_id = lexicon.word_table["#0"]
@@ -126,7 +132,7 @@ def main():
 
     logging.info(f"Processing {lang_dir}")
 
-    LG = compile_LG(lang_dir)
+    LG = compile_LG(lang_dir, args.lm_dir)
     logging.info(f"Saving LG.pt to {lang_dir}")
     torch.save(LG.as_dict(), f"{lang_dir}/LG.pt")
 

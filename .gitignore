@@ -4,6 +4,7 @@ __pycache__
 path.sh
 exp
 exp*/
+qlogs*
 *.pt
 download
 dask-worker-space
