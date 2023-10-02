@@ -63,11 +63,23 @@ def compute_fbank_librispeech(bpe_model: Optional[str] = None):
     num_jobs = min(15, os.cpu_count())
     num_mel_bins = 80
 
+<<<<<<< HEAD
     if bpe_model:
         logging.info(f"Loading {bpe_model}")
         sp = spm.SentencePieceProcessor()
         sp.load(bpe_model)
 
+=======
+    # dataset_parts = (
+    #     "dev-clean",
+    #     "dev-other",
+    #     "test-clean",
+    #     "test-other",
+    #     "train-clean-100",
+    #     "train-clean-360",
+    #     "train-other-500",
+    # )
+>>>>>>> 8b96e5edcb5894cc5ce5ee14c3800c1e4dac653c
     dataset_parts = (
         "dev-clean-2",
         "train-clean-5",

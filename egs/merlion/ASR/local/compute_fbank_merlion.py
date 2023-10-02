@@ -52,12 +52,12 @@ def compute_fbank_merlion():
     num_mel_bins = 80
 
     dataset_parts = (
-        # "SEAME",
-        # "LibriSpeech",
-        # "NSC",
-        # "AISHELL",
+        "SEAME",
+        "LibriSpeech",
+        "NSC",
+        "AISHELL",
         "dev",
-        # "test",
+        "test",
     )
     suffix = "jsonl.gz"
     manifests = read_manifests_if_cached(

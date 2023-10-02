@@ -374,7 +374,10 @@ def main():
     token2id = generate_id_map(tokens)
     word2id = generate_id_map(words)
 
+<<<<<<< HEAD
     
+=======
+>>>>>>> 8b96e5edcb5894cc5ce5ee14c3800c1e4dac653c
     write_mapping(lang_dir / "tokens.txt", token2id)
     write_mapping(lang_dir / "words.txt", word2id)
     write_lexicon(lang_dir / "lexicon_disambig.txt", lexicon_disambig)

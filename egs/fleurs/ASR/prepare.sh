@@ -187,6 +187,7 @@ if [ $stage -le 6 ] && [ $stop_stage -ge 6 ]; then
       --output $lm_dir/transcript_tokens.txt
   fi
 
+<<<<<<< HEAD
   if [ ! -f $lm_dir/transcript_tokens_validation.txt ]; then
     ./local/transcript_tokens.py \
       --manifests-dir data/manifests \
@@ -201,6 +202,8 @@ if [ $stage -le 6 ] && [ $stop_stage -ge 6 ]; then
       --part "test"
   fi
 
+=======
+>>>>>>> 8b96e5edcb5894cc5ce5ee14c3800c1e4dac653c
   if [ ! -f $lm_dir/G_3_gram.arpa ]; then
     ./shared/make_kn_lm.py \
       -ngram-order 3 \
@@ -299,6 +302,7 @@ if [ $stage -le 10 ] && [ $stop_stage -ge 10 ]; then
   # done
 fi
 
+<<<<<<< HEAD
 if [ $stage -le 11 ] && [ $stop_stage -ge 11 ]; then
   log "Interpolating the LegiCoST LM with the fleurs LM"
 
@@ -477,6 +481,8 @@ if [ $stage -le 14 ] && [ $stop_stage -ge 14 ]; then
   ./local/compile_lg.py --lang-dir $lang_dir --lm-dir $interpolate_dir
 fi
 
+=======
+>>>>>>> 8b96e5edcb5894cc5ce5ee14c3800c1e4dac653c
 # if [ $stage -le 11 ] && [ $stop_stage -ge 11 ]; then
 #   log "Stage 11: Generate LM training data"
 

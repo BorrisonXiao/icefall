@@ -27,6 +27,7 @@ import sentencepiece as spm
 import torch
 import torch.nn as nn
 from asr_datamodule import HKLEGCOAsrDataModule
+<<<<<<< HEAD
 from zipformer import Zipformer
 # For some reason the import causes aborted, why??????????
 # try:
@@ -37,6 +38,9 @@ from zipformer import Zipformer
 #     print("error importing")
 #     from .train import add_model_arguments, get_params
 
+=======
+from conformer import Conformer
+>>>>>>> 8b96e5edcb5894cc5ce5ee14c3800c1e4dac653c
 
 from lhotse.cut import Cut
 from icefall.bpe_graph_compiler import BpeCtcTrainingGraphCompiler
@@ -66,6 +70,7 @@ from icefall.utils import (
 )
 
 
+<<<<<<< HEAD
 def get_params() -> AttributeDict:
     params = AttributeDict(
         {
@@ -177,6 +182,8 @@ def add_model_arguments(parser: argparse.ArgumentParser):
     )
 
 
+=======
+>>>>>>> 8b96e5edcb5894cc5ce5ee14c3800c1e4dac653c
 def get_parser():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
@@ -252,7 +259,11 @@ def get_parser():
     parser.add_argument(
         "--exp-dir",
         type=str,
+<<<<<<< HEAD
         default="zipformer_ctc/exp",
+=======
+        default="conformer_ctc/exp",
+>>>>>>> 8b96e5edcb5894cc5ce5ee14c3800c1e4dac653c
         help="The experiment dir",
     )
 
@@ -327,11 +338,40 @@ def get_parser():
         last output linear layer
         """,
     )
+<<<<<<< HEAD
     add_model_arguments(parser)
+=======
+>>>>>>> 8b96e5edcb5894cc5ce5ee14c3800c1e4dac653c
 
     return parser
 
 
+<<<<<<< HEAD
+=======
+def get_params() -> AttributeDict:
+    params = AttributeDict(
+        {
+            # parameters for conformer
+            "subsampling_factor": 4,
+            "vgg_frontend": False,
+            "use_feat_batchnorm": True,
+            "feature_dim": 80,
+            "nhead": 8,
+            "attention_dim": 512,
+            "num_decoder_layers": 6,
+            # parameters for decoding
+            "search_beam": 20,
+            "output_beam": 8,
+            "min_active_states": 30,
+            "max_active_states": 10000,
+            "use_double_scores": True,
+            "env_info": get_env_info(),
+        }
+    )
+    return params
+
+
+>>>>>>> 8b96e5edcb5894cc5ce5ee14c3800c1e4dac653c
 def decode_one_batch(
     params: AttributeDict,
     model: nn.Module,
@@ -404,9 +444,19 @@ def decode_one_batch(
     # at entry, feature is (N, T, C)
 
     supervisions = batch["supervisions"]
+<<<<<<< HEAD
     feature_lens = supervisions["num_frames"].to(device)
 
     nnet_output, _ = model(feature, feature_lens)
+=======
+
+    # TODO: Fix this very weird long utt issue, it seems to be a lhotse problem though
+    if feature.shape[1] > 5000:
+        print(batch)
+        print(feature.shape)
+        return None
+    nnet_output, memory, memory_key_padding_mask = model(feature, supervisions)
+>>>>>>> 8b96e5edcb5894cc5ce5ee14c3800c1e4dac653c
     # nnet_output is (N, T, C)
 
     supervision_segments = torch.stack(
@@ -850,6 +900,7 @@ def main():
     else:
         G = None
 
+<<<<<<< HEAD
     def to_int_tuple(s: str):
         return tuple(map(int, s.split(",")))
 
@@ -866,6 +917,17 @@ def main():
         feedforward_dim=to_int_tuple(params.feedforward_dims),
         cnn_module_kernels=to_int_tuple(params.cnn_module_kernels),
         num_encoder_layers=to_int_tuple(params.num_encoder_layers),
+=======
+    model = Conformer(
+        num_features=params.feature_dim,
+        nhead=params.nhead,
+        d_model=params.attention_dim,
+        num_classes=num_classes,
+        subsampling_factor=params.subsampling_factor,
+        num_decoder_layers=params.num_decoder_layers,
+        vgg_frontend=params.vgg_frontend,
+        use_feat_batchnorm=params.use_feat_batchnorm,
+>>>>>>> 8b96e5edcb5894cc5ce5ee14c3800c1e4dac653c
     )
 
     if params.avg == 1:
@@ -909,7 +971,20 @@ def main():
     args.return_cuts = True
     hklegco = HKLEGCOAsrDataModule(args)
 
+<<<<<<< HEAD
     test_cuts = hklegco.test_cuts()
+=======
+    # train_cuts = hklegco.train_cuts()
+    # def remove_short_and_long_utt(c: Cut):
+    #     return 0.5 <= c.duration <= 55.0
+    # train_cuts = train_cuts.filter(remove_short_and_long_utt)
+    # train_dl = hklegco.train_dataloaders(train_cuts)
+    # for batch in train_dl:
+    #     print(batch)
+    #     assert False
+    test_cuts = hklegco.test_cuts()
+    # test_cuts = test_cuts.filter(remove_short_and_long_utt)
+>>>>>>> 8b96e5edcb5894cc5ce5ee14c3800c1e4dac653c
 
     test_dl = hklegco.test_dataloaders(test_cuts)
 

@@ -72,9 +72,9 @@ def main():
     with open(f"{lang_dir}/transcript_words.txt", 'w') as f:
         f.write(train_text)
     train_text = f"{lang_dir}/transcript_words.txt"
-    character_coverage = 1
+    character_coverage = 0.9995
     input_sentence_size = 100000000
-    max_sentencepiece_length = 10
+    max_sentencepiece_length = 4
 
     user_defined_symbols = ["<blk>", "<sos/eos>"]
     unk_id = len(user_defined_symbols)

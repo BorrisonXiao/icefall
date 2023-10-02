@@ -20,10 +20,17 @@
 """
 Usage:
   export CUDA_VISIBLE_DEVICES="0,1,2,3"
+<<<<<<< HEAD
   ./zipformer_ctc/train.py \
      --exp-dir ./zipformer_ctc/exp \
      --world-size 1 \
      --max-duration 160 \
+=======
+  ./conformer_ctc/train.py \
+     --exp-dir ./conformer_ctc/exp \
+     --world-size 1 \
+     --max-duration 200 \
+>>>>>>> 8b96e5edcb5894cc5ce5ee14c3800c1e4dac653c
      --num-epochs 2 \
      --lang-dir data/lang_phone \
      --att-rate 0 \
@@ -41,7 +48,11 @@ import torch
 import torch.multiprocessing as mp
 import torch.nn as nn
 from asr_datamodule import HKLEGCOAsrDataModule
+<<<<<<< HEAD
 from zipformer import Zipformer
+=======
+from conformer import Conformer
+>>>>>>> 8b96e5edcb5894cc5ce5ee14c3800c1e4dac653c
 from lhotse.cut import Cut
 from lhotse.utils import fix_random_seed
 from torch import Tensor
@@ -49,6 +60,10 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.tensorboard import SummaryWriter
 from transformer import Noam
+<<<<<<< HEAD
+=======
+from optim import Eden, Eve
+>>>>>>> 8b96e5edcb5894cc5ce5ee14c3800c1e4dac653c
 
 from icefall.bpe_graph_compiler import BpeCtcTrainingGraphCompiler
 from icefall.checkpoint import load_checkpoint
@@ -67,6 +82,7 @@ from icefall.utils import (
 from datetime import datetime
 
 
+<<<<<<< HEAD
 def add_model_arguments(parser: argparse.ArgumentParser):
     parser.add_argument(
         "--num-encoder-layers",
@@ -145,6 +161,8 @@ def add_model_arguments(parser: argparse.ArgumentParser):
     )
 
 
+=======
+>>>>>>> 8b96e5edcb5894cc5ce5ee14c3800c1e4dac653c
 def get_parser():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
@@ -184,14 +202,22 @@ def get_parser():
         default=0,
         help="""Resume training from from this epoch.
         If it is positive, it will load checkpoint from
+<<<<<<< HEAD
         zipformer_ctc/exp/epoch-{start_epoch-1}.pt
+=======
+        conformer_ctc/exp/epoch-{start_epoch-1}.pt
+>>>>>>> 8b96e5edcb5894cc5ce5ee14c3800c1e4dac653c
         """,
     )
 
     parser.add_argument(
         "--exp-dir",
         type=str,
+<<<<<<< HEAD
         default="zipformer_ctc/exp",
+=======
+        default="conformer_ctc/exp",
+>>>>>>> 8b96e5edcb5894cc5ce5ee14c3800c1e4dac653c
         help="""The experiment dir.
         It specifies the directory where all training related
         files, e.g., checkpoints, log, etc, are saved
@@ -239,7 +265,34 @@ def get_parser():
         default=42,
         help="The seed for random generators intended for reproducibility",
     )
+<<<<<<< HEAD
     add_model_arguments(parser)
+=======
+
+    parser.add_argument(
+        "--initial-lr",
+        type=float,
+        default=0.003,
+        help="""The initial learning rate. This value should not need to be
+        changed.""",
+    )
+
+    parser.add_argument(
+        "--lr-batches",
+        type=float,
+        default=5000,
+        help="""Number of steps that affects how rapidly the learning rate decreases.
+        We suggest not to change this.""",
+    )
+
+    parser.add_argument(
+        "--lr-epochs",
+        type=float,
+        default=6,
+        help="""Number of epochs that affects how rapidly the learning rate decreases.
+        """,
+    )
+>>>>>>> 8b96e5edcb5894cc5ce5ee14c3800c1e4dac653c
 
     return parser
 
@@ -307,8 +360,11 @@ def get_params() -> AttributeDict:
     """
     params = AttributeDict(
         {
+<<<<<<< HEAD
             "frame_shift_ms": 10.0,
             "allowed_excess_duration_ratio": 0.1,
+=======
+>>>>>>> 8b96e5edcb5894cc5ce5ee14c3800c1e4dac653c
             "best_train_loss": float("inf"),
             "best_valid_loss": float("inf"),
             "best_train_epoch": -1,
@@ -317,10 +373,19 @@ def get_params() -> AttributeDict:
             "log_interval": 50,
             "reset_interval": 200,
             "valid_interval": 3000,
+<<<<<<< HEAD
             # parameters for zipformer
             "feature_dim": 80,
             "subsampling_factor": 4,  # not passed in, this is fixed.
             "warm_step": 5000,
+=======
+            # parameters for conformer
+            "feature_dim": 80,
+            "subsampling_factor": 4,
+            "use_feat_batchnorm": True,
+            "attention_dim": 512,
+            "nhead": 8,
+>>>>>>> 8b96e5edcb5894cc5ce5ee14c3800c1e4dac653c
             # parameters for loss
             "beam_size": 10,
             "reduction": "sum",
@@ -436,7 +501,11 @@ def compute_loss(
       params:
         Parameters for training. See :func:`get_params`.
       model:
+<<<<<<< HEAD
         The model for training. It is an instance of Zipformer in our case.
+=======
+        The model for training. It is an instance of Conformer in our case.
+>>>>>>> 8b96e5edcb5894cc5ce5ee14c3800c1e4dac653c
       batch:
         A batch of data. See `lhotse.dataset.K2SpeechRecognitionDataset()`
         for the content in it.
@@ -456,9 +525,14 @@ def compute_loss(
     feature = feature.to(device)
 
     supervisions = batch["supervisions"]
+<<<<<<< HEAD
     feature_lens = supervisions["num_frames"].to(device)
     with torch.set_grad_enabled(is_training):
         nnet_output, _ = model(feature, feature_lens)
+=======
+    with torch.set_grad_enabled(is_training):
+        nnet_output, encoder_memory, memory_mask = model(feature, supervisions)
+>>>>>>> 8b96e5edcb5894cc5ce5ee14c3800c1e4dac653c
         # nnet_output is (N, T, C)
 
     # NOTE: We need `encode_supervisions` to sort sequences with
@@ -768,6 +842,7 @@ def run(rank, world_size, args):
         )
 
     logging.info("About to create model")
+<<<<<<< HEAD
     def to_int_tuple(s: str):
         return tuple(map(int, s.split(",")))
     model = Zipformer(
@@ -783,6 +858,17 @@ def run(rank, world_size, args):
         feedforward_dim=to_int_tuple(params.feedforward_dims),
         cnn_module_kernels=to_int_tuple(params.cnn_module_kernels),
         num_encoder_layers=to_int_tuple(params.num_encoder_layers),
+=======
+    model = Conformer(
+        num_features=params.feature_dim,
+        nhead=params.nhead,
+        d_model=params.attention_dim,
+        num_classes=num_classes,
+        subsampling_factor=params.subsampling_factor,
+        num_decoder_layers=params.num_decoder_layers,
+        vgg_frontend=False,
+        use_feat_batchnorm=params.use_feat_batchnorm,
+>>>>>>> 8b96e5edcb5894cc5ce5ee14c3800c1e4dac653c
     )
 
     checkpoints = load_checkpoint_if_available(params=params, model=model)
@@ -791,6 +877,7 @@ def run(rank, world_size, args):
     if world_size > 1:
         model = DDP(model, device_ids=[rank])
 
+<<<<<<< HEAD
     optimizer = Noam(
         model.parameters(),
         # model_size=params.attention_dim,
@@ -803,6 +890,31 @@ def run(rank, world_size, args):
         logging.info("Loading optimizer state dict")
         optimizer.load_state_dict(checkpoints["optimizer"])
 
+=======
+    # optimizer = Noam(
+    #     model.parameters(),
+    #     model_size=params.attention_dim,
+    #     factor=params.lr_factor,
+    #     warm_step=params.warm_step,
+    #     weight_decay=params.weight_decay,
+    # )
+    optimizer = Eve(model.parameters(), lr=params.initial_lr)
+
+    scheduler = Eden(optimizer, params.lr_batches, params.lr_epochs)
+
+    if checkpoints and "optimizer" in checkpoints:
+        logging.info("Loading optimizer state dict")
+        optimizer.load_state_dict(checkpoints["optimizer"])
+
+    if (
+        checkpoints
+        and "scheduler" in checkpoints
+        and checkpoints["scheduler"] is not None
+    ):
+        logging.info("Loading scheduler state dict")
+        scheduler.load_state_dict(checkpoints["scheduler"])
+
+>>>>>>> 8b96e5edcb5894cc5ce5ee14c3800c1e4dac653c
     hklegco = HKLEGCOAsrDataModule(args)
 
     train_cuts = hklegco.train_cuts()

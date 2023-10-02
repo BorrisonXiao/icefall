@@ -307,6 +307,11 @@ def decode_one_batch(
 
     supervisions = batch["supervisions"]
 
+    # TODO: Fix this very weird long utt issue, it seems to be a lhotse problem though
+    if feature.shape[1] > 5000:
+        print(batch)
+        print(feature.shape)
+        return None
     nnet_output, memory, memory_key_padding_mask = model(feature, supervisions)
     # nnet_output is (N, T, C)
 
