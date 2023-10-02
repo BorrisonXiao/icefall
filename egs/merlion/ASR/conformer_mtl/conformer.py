@@ -163,6 +163,7 @@ class ConformerMTL(Transformer):
         use_feat_batchnorm: Union[float, bool] = 0.1,
         lid_num_classes: int = 3,
         lid_dim: int = 512,
+        num_lstm_layers: int = 1,
     ) -> None:
         super(ConformerMTL, self).__init__(
             num_features=num_features,
@@ -205,7 +206,7 @@ class ConformerMTL(Transformer):
         self.lstm = nn.LSTM(
             input_size=d_model,
             hidden_size=lid_dim,
-            num_layers=1,
+            num_layers=num_lstm_layers,
             batch_first=False,
             bidirectional=False,
         )
