@@ -115,63 +115,6 @@ if [ $stage -le 3 ] && [ $stop_stage -ge 3 ]; then
   fi
 fi
 
-# if [ $stage -le 4 ] && [ $stop_stage -ge 4 ]; then
-#   log "Stage 4: Prepare BPE based lang"
-
-#   for vocab_size in "${vocab_sizes[@]}"; do
-#     lang_dir=data/lang_bpe_${vocab_size}
-#     mkdir -p $lang_dir
-
-#     if [ ! -f $lang_dir/bpe.model ]; then
-#       ./local/train_bpe_model.py \
-#         --lang-dir $lang_dir \
-#         --vocab-size $vocab_size \
-#         --supervision-set data/manifests/fleurs_supervisions_train.jsonl.gz
-#     fi
-
-#     if [ ! -f $lang_dir/L_disambig.pt ]; then
-#       ./local/prepare_lang_bpe.py --lang-dir $lang_dir
-
-#       log "Validating $lang_dir/lexicon.txt"
-#       ./local/validate_bpe_lexicon.py \
-#         --lexicon $lang_dir/lexicon.txt \
-#         --bpe-model $lang_dir/bpe.model
-#     fi
-#   done
-# fi
-
-# if [ $stage -le 5 ] && [ $stop_stage -ge 5 ]; then
-#   log "Stage 5: Prepare bigram P"
-
-#   for vocab_size in "${vocab_sizes[@]}"; do
-#     lang_dir=data/lang_bpe_${vocab_size}
-
-#     if [ ! -f $lang_dir/transcript_tokens.txt ]; then
-#       ./local/convert_transcript_words_to_tokens.py \
-#         --lexicon $lang_dir/lexicon.txt \
-#         --bpe-model $lang_dir/bpe.model \
-#         --transcript $lang_dir/transcript_words.txt \
-#         --oov "<UNK>" \
-#         > $lang_dir/transcript_tokens.txt
-#     fi
-
-#     if [ ! -f $lang_dir/P.arpa ]; then
-#       ./shared/make_kn_lm.py \
-#         -ngram-order 2 \
-#         -text $lang_dir/transcript_tokens.txt \
-#         -lm $lang_dir/P.arpa
-#     fi
-
-#     if [ ! -f $lang_dir/P.fst.txt ]; then
-#       python3 -m kaldilm \
-#         --read-symbol-table="$lang_dir/tokens.txt" \
-#         --disambig-symbol='#0' \
-#         --max-order=2 \
-#         $lang_dir/P.arpa > $lang_dir/P.fst.txt
-#     fi
-#   done
-# fi
-
 if [ $stage -le 6 ] && [ $stop_stage -ge 6 ]; then
   log "Stage 6: Prepare G"
   # We assume you have install kaldilm, if not, please install
@@ -187,7 +130,6 @@ if [ $stage -le 6 ] && [ $stop_stage -ge 6 ]; then
       --output $lm_dir/transcript_tokens.txt
   fi
 
-<<<<<<< HEAD
   if [ ! -f $lm_dir/transcript_tokens_validation.txt ]; then
     ./local/transcript_tokens.py \
       --manifests-dir data/manifests \
@@ -202,8 +144,6 @@ if [ $stage -le 6 ] && [ $stop_stage -ge 6 ]; then
       --part "test"
   fi
 
-=======
->>>>>>> 8b96e5edcb5894cc5ce5ee14c3800c1e4dac653c
   if [ ! -f $lm_dir/G_3_gram.arpa ]; then
     ./shared/make_kn_lm.py \
       -ngram-order 3 \
@@ -235,74 +175,19 @@ if [ $stage -le 6 ] && [ $stop_stage -ge 6 ]; then
       --max-order=4 \
       $lm_dir/G_4_gram.arpa >$lm_dir/G_4_gram.fst.txt
   fi
-
-  # for vocab_size in "${vocab_sizes[@]}"; do
-  #   lang_dir=data/lang_bpe_${vocab_size}
-  #   lm_dir=data/lm_${vocab_size}
-  #   mkdir -p $lm_dir
-
-  #   if [ ! -f $lm_dir/transcript_words.processed.txt ]; then
-  #     ./local/transcript_words_bpe.py \
-  #       --transcript $lang_dir/transcript_tokens.txt \
-  #       --output $lm_dir/transcript_words.processed.txt
-  #   fi
-
-  #   if [ ! -f $lm_dir/G_3_gram.arpa ]; then
-  #     ./shared/make_kn_lm.py \
-  #       -ngram-order 3 \
-  #       -text $lm_dir/transcript_words.processed.txt \
-  #       -lm $lm_dir/G_3_gram.arpa
-  #   fi
-
-  #   if [ ! -f $lm_dir/G_3_gram.fst.txt ]; then
-  #     log "Making kaldilm for $lm_dir/G_3_gram.arpa"
-  #     python3 -m kaldilm \
-  #       --read-symbol-table="$lang_dir/words.txt" \
-  #       --disambig-symbol='#0' \
-  #       --max-order=3 \
-  #       $lm_dir/G_3_gram.arpa >$lm_dir/G_3_gram.fst.txt
-  #   fi
-
-  #   if [ ! -f $lm_dir/G_4_gram.arpa ]; then
-  #     ./shared/make_kn_lm.py \
-  #       -ngram-order 4 \
-  #       -text $lm_dir/transcript_words.processed.txt \
-  #       -lm $lm_dir/G_4_gram.arpa
-  #   fi
-
-  #   if [ ! -f $lm_dir/G_4_gram.fst.txt ]; then
-  #     log "Making kaldilm for $lm_dir/G_4_gram.arpa"
-  #     python3 -m kaldilm \
-  #       --read-symbol-table="$lang_dir/words.txt" \
-  #       --disambig-symbol='#0' \
-  #       --max-order=4 \
-  #       $lm_dir/G_4_gram.arpa >$lm_dir/G_4_gram.fst.txt
-  #   fi
-  # done
 fi
 
 if [ $stage -le 9 ] && [ $stop_stage -ge 9 ]; then
   log "Stage 9: Compile HLG"
   ./local/compile_hlg.py --lang-dir data/lang_phone --lm-dir data/lm_phone
-
-  # for vocab_size in ${vocab_sizes[@]}; do
-  #   lang_dir=data/lang_bpe_${vocab_size}
-  #   ./local/compile_hlg.py --lang-dir $lang_dir
-  # done
 fi
 
 # Compile LG for RNN-T fast_beam_search decoding
 if [ $stage -le 10 ] && [ $stop_stage -ge 10 ]; then
   log "Stage 10: Compile LG"
   ./local/compile_lg.py --lang-dir data/lang_phone --lm-dir data/lm_phone
-
-  # for vocab_size in ${vocab_sizes[@]}; do
-  #   lang_dir=data/lang_bpe_${vocab_size}
-  #   ./local/compile_lg.py --lang-dir $lang_dir
-  # done
 fi
 
-<<<<<<< HEAD
 if [ $stage -le 11 ] && [ $stop_stage -ge 11 ]; then
   log "Interpolating the LegiCoST LM with the fleurs LM"
 
@@ -480,103 +365,5 @@ if [ $stage -le 14 ] && [ $stop_stage -ge 14 ]; then
   ./local/compile_hlg.py --lang-dir $lang_dir --lm-dir $interpolate_dir
   ./local/compile_lg.py --lang-dir $lang_dir --lm-dir $interpolate_dir
 fi
-
-=======
->>>>>>> 8b96e5edcb5894cc5ce5ee14c3800c1e4dac653c
-# if [ $stage -le 11 ] && [ $stop_stage -ge 11 ]; then
-#   log "Stage 11: Generate LM training data"
-
-#   for vocab_size in ${vocab_sizes[@]}; do
-#     log "Processing vocab_size == ${vocab_size}"
-#     lang_dir=data/lang_bpe_${vocab_size}
-#     out_dir=data/lm_training_bpe_${vocab_size}
-#     mkdir -p $out_dir
-
-#     ./local/prepare_lm_training_data.py \
-#       --bpe-model $lang_dir/bpe.model \
-#       --lm-data $dl_dir/lm/librispeech-lm-norm.txt \
-#       --lm-archive $out_dir/lm_data.pt
-#   done
-# fi
-
-# if [ $stage -le 12 ] && [ $stop_stage -ge 12 ]; then
-#   log "Stage 12: Generate LM validation data"
-
-#   for vocab_size in ${vocab_sizes[@]}; do
-#     log "Processing vocab_size == ${vocab_size}"
-#     out_dir=data/lm_training_bpe_${vocab_size}
-#     mkdir -p $out_dir
-
-#     if [ ! -f $out_dir/valid.txt ]; then
-#       files=$(
-#         find "$dl_dir/LibriSpeech/dev-clean" -name "*.trans.txt"
-#         find "$dl_dir/LibriSpeech/dev-other" -name "*.trans.txt"
-#       )
-#       for f in ${files[@]}; do
-#         cat $f | cut -d " " -f 2-
-#       done > $out_dir/valid.txt
-#     fi
-
-#     lang_dir=data/lang_bpe_${vocab_size}
-#     ./local/prepare_lm_training_data.py \
-#       --bpe-model $lang_dir/bpe.model \
-#       --lm-data $out_dir/valid.txt \
-#       --lm-archive $out_dir/lm_data-valid.pt
-#   done
-# fi
-
-# if [ $stage -le 13 ] && [ $stop_stage -ge 13 ]; then
-#   log "Stage 13: Generate LM test data"
-
-#   for vocab_size in ${vocab_sizes[@]}; do
-#     log "Processing vocab_size == ${vocab_size}"
-#     out_dir=data/lm_training_bpe_${vocab_size}
-#     mkdir -p $out_dir
-
-#     if [ ! -f $out_dir/test.txt ]; then
-#       files=$(
-#         find "$dl_dir/LibriSpeech/test-clean" -name "*.trans.txt"
-#         find "$dl_dir/LibriSpeech/test-other" -name "*.trans.txt"
-#       )
-#       for f in ${files[@]}; do
-#         cat $f | cut -d " " -f 2-
-#       done > $out_dir/test.txt
-#     fi
-
-#     lang_dir=data/lang_bpe_${vocab_size}
-#     ./local/prepare_lm_training_data.py \
-#       --bpe-model $lang_dir/bpe.model \
-#       --lm-data $out_dir/test.txt \
-#       --lm-archive $out_dir/lm_data-test.pt
-#   done
-# fi
-
-# if [ $stage -le 14 ] && [ $stop_stage -ge 14 ]; then
-#   log "Stage 14: Sort LM training data"
-#   # Sort LM training data by sentence length in descending order
-#   # for ease of training.
-#   #
-#   # Sentence length equals to the number of BPE tokens
-#   # in a sentence.
-
-#   for vocab_size in ${vocab_sizes[@]}; do
-#     out_dir=data/lm_training_bpe_${vocab_size}
-#     mkdir -p $out_dir
-#     ./local/sort_lm_training_data.py \
-#       --in-lm-data $out_dir/lm_data.pt \
-#       --out-lm-data $out_dir/sorted_lm_data.pt \
-#       --out-statistics $out_dir/statistics.txt
-
-#     ./local/sort_lm_training_data.py \
-#       --in-lm-data $out_dir/lm_data-valid.pt \
-#       --out-lm-data $out_dir/sorted_lm_data-valid.pt \
-#       --out-statistics $out_dir/statistics-valid.txt
-
-#     ./local/sort_lm_training_data.py \
-#       --in-lm-data $out_dir/lm_data-test.pt \
-#       --out-lm-data $out_dir/sorted_lm_data-test.pt \
-#       --out-statistics $out_dir/statistics-test.txt
-#   done
-# fi
 
 log "Successfully finished. [elapsed=${SECONDS}s]"
